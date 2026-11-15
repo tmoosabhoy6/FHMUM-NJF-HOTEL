@@ -17,6 +17,20 @@ For a deployed copy: `npm run build && npm start`, with the two NKERP values
 set as secrets on the host. The NKERP login stays on the server; the browser
 never sees it. `.env` is git-ignored.
 
+### GitHub Pages
+
+Every push to `main` deploys the app to
+<https://tmoosabhoy6.github.io/FHMUM-NJF-HOTEL/> (`.github/workflows/pages.yml`).
+
+Pages only hosts files, and NKERP accepts its login cookie only from its own
+site, so the Pages copy cannot read NKERP by itself. On its own it offers
+sample groups. To pull live data there:
+
+1. Run the server somewhere (`npm start` with `NKERP_LOGIN_ID`,
+   `NKERP_PASSWORD` and `ALLOWED_ORIGINS=https://tmoosabhoy6.github.io`).
+2. In the repo, add an Actions variable `NKERP_API_URL` set to that server's
+   address, then re-run the Pages workflow.
+
 `npm test` runs the planner and NKERP-reading tests.
 
 ## How a plan is made

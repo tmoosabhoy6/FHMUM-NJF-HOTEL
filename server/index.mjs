@@ -9,7 +9,6 @@ import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NkerpError, sharedClient } from './nkerp/client.mjs';
 import { DEFAULT_OFFICE, runSync } from './nkerp/sync.mjs';
-import { runSample } from './sample.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const DIST = join(ROOT, 'dist');
@@ -29,6 +28,25 @@ const MIME = {
   '.ico': 'image/x-icon',
 };
 
+/**
+ * Origins allowed to call this API from another site, e.g. the GitHub Pages
+ * copy of the app: ALLOWED_ORIGINS=https://tmoosabhoy6.github.io
+ */
+const ALLOWED_ORIGINS = new Set(
+  (process.env.ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((o) => o.trim().replace(/\/$/, ''))
+    .filter(Boolean),
+);
+
+function cors(req, res) {
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
+}
+
 function json(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(body));
@@ -38,7 +56,6 @@ function json(res, status, body) {
 async function handleSync(req, res, url) {
   const from = url.searchParams.get('from') ?? '';
   const to = url.searchParams.get('to') || null;
-  const source = url.searchParams.get('source') === 'sample' ? 'sample' : 'nkerp';
   if (!ISO_DATE.test(from) || (to && !ISO_DATE.test(to)) || (to && to < from)) {
     return json(res, 400, { error: 'Choose a start date, and an end date that is not before it.' });
   }
@@ -55,10 +72,7 @@ async function handleSync(req, res, url) {
   };
   const beat = setInterval(() => !res.writableEnded && res.write(': keep-alive\n\n'), 15_000);
   try {
-    const result =
-      source === 'sample'
-        ? await runSample({ from, to, emit })
-        : await runSync({ client: sharedClient(), from, to, office: OFFICE, emit, signal: abort.signal });
+    const result = await runSync({ client: sharedClient(), from, to, office: OFFICE, emit, signal: abort.signal });
     emit('done', result);
   } catch (error) {
     if (!abort.signal.aborted) {
@@ -76,6 +90,11 @@ async function handleSync(req, res, url) {
 }
 
 async function handleApi(req, res, url) {
+  cors(req, res);
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, { 'Access-Control-Allow-Methods': 'GET', 'Access-Control-Max-Age': '600' });
+    return res.end();
+  }
   if (req.method !== 'GET') return json(res, 405, { error: 'Read-only API' });
   if (url.pathname === '/api/health') {
     return json(res, 200, { ok: true, nkerp: sharedClient().configured, office: OFFICE });

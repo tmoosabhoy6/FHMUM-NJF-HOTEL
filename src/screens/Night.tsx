@@ -2,7 +2,7 @@ import { motion } from 'motion/react';
 import { useMemo } from 'react';
 import { addDays, dayMonth, dayNumber, eachDate, fullDate, monthShort } from '../../shared/dates';
 import { Brand, Num } from '../components/ui';
-import { STEP_ORDER, STEP_TITLE, type PullProgress } from '../lib/sync';
+import { STEP_ORDER, STEP_TITLE, type PullProgress, type ServerState } from '../lib/sync';
 
 interface Props {
   mode: 'start' | 'pulling' | 'failed';
@@ -14,7 +14,8 @@ interface Props {
   onCancel: () => void;
   onResume: (() => void) | null;
   resumeLabel: string | null;
-  nkerpReady: boolean | null;
+  server: ServerState;
+  source: 'nkerp' | 'sample';
   progress: PullProgress;
   error: string | null;
 }
@@ -106,7 +107,7 @@ export function Night(props: Props) {
         <div className="night-copy">
           {pulling ? (
             <motion.div key="pulling" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-              <h1>Reading NKERP</h1>
+              <h1>{props.source === 'sample' ? 'Making sample groups' : 'Reading NKERP'}</h1>
               <p className="lede">
                 From {fullDate(from)}
                 {to ? ` to ${fullDate(to)}` : ', as far ahead as tours are approved'}.
@@ -170,18 +171,30 @@ export function Night(props: Props) {
                     {error}
                   </p>
                 ) : null}
-                {props.nkerpReady === false ? (
+                {props.server === 'no-login' ? (
                   <p className="night-warning">
-                    NKERP sign-in is not set up on this server. Add NKERP_LOGIN_ID and NKERP_PASSWORD to its settings, then reload.
+                    NKERP sign-in is not set up on the server. Add NKERP_LOGIN_ID and NKERP_PASSWORD to its settings, then reload.
+                  </p>
+                ) : props.server === 'no-server' ? (
+                  <p className="night-warning">
+                    This copy of the app is not connected to the NKERP server, so it can only show sample groups for now.
                   </p>
                 ) : null}
                 <div className="night-aside">
-                  <button className="lamp-button" type="submit" disabled={props.nkerpReady === false || !from}>
-                    {mode === 'failed' ? 'Pull again' : 'Pull from NKERP'}
-                  </button>
-                  <button className="linkish" type="button" onClick={() => props.onPull('sample')}>
-                    Try with sample groups
-                  </button>
+                  {props.server === 'no-server' ? (
+                    <button className="lamp-button" type="button" disabled={!from} onClick={() => props.onPull('sample')}>
+                      Try with sample groups
+                    </button>
+                  ) : (
+                    <>
+                      <button className="lamp-button" type="submit" disabled={props.server !== 'ready' || !from}>
+                        {mode === 'failed' ? 'Pull again' : 'Pull from NKERP'}
+                      </button>
+                      <button className="linkish" type="button" onClick={() => props.onPull('sample')}>
+                        Try with sample groups
+                      </button>
+                    </>
+                  )}
                 </div>
               </form>
             </motion.div>

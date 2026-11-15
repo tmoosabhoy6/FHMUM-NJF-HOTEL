@@ -1,9 +1,14 @@
 /**
- * Made-up groups for trying the planner without NKERP. Deterministic for a
- * given start date so screenshots and tests are repeatable. None of these
- * tours exist.
+ * Made-up groups for trying the planner without NKERP. Runs in the browser,
+ * so it works on a static host with no server. Deterministic for a given
+ * start date so screenshots and tests are repeatable. None of these tours exist.
  */
-import { addDays, airlineOf } from './nkerp/normalize.mjs';
+import { addDays, daysBetween } from './dates';
+import type { Group, PullMeta } from './types';
+
+type Emit = (event: string, data: unknown) => void;
+
+const airlineOf = (flight: string | null) => (flight ? (flight.match(/^([A-Z][A-Z0-9])/)?.[1] ?? null) : null);
 
 const LEADERS = [
   'Shk Mustafa bhai Rangwala', 'M Huzaifa bhai Lokhandwala', 'Shk Aliasgar bhai Poonawala', 'M Burhanuddin bhai Kapasi',
@@ -11,7 +16,7 @@ const LEADERS = [
   'Shk Murtaza bhai Dahodwala', 'M Idris bhai Kagalwala', 'Shk Qusai bhai Saifee', 'M Ammar bhai Vohra',
 ];
 
-function rng(seed) {
+function rng(seed: number) {
   let s = seed >>> 0;
   return () => {
     s = (s + 0x6d2b79f5) >>> 0;
@@ -21,18 +26,32 @@ function rng(seed) {
   };
 }
 
-export async function runSample({ from, to = null, emit = () => {} }) {
-  const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-  const step = (id, status, detail) => emit('step', { id, status, detail });
+export async function runSample({
+  from,
+  to = null,
+  emit = () => {},
+  signal,
+}: {
+  from: string;
+  to?: string | null;
+  emit?: Emit;
+  signal?: AbortSignal;
+}): Promise<{ groups: Group[]; meta: PullMeta }> {
+  const wait = (ms: number) =>
+    new Promise<void>((resolve, reject) => {
+      if (signal?.aborted) return reject(new DOMException('Stopped', 'AbortError'));
+      setTimeout(resolve, ms);
+    });
+  const step = (id: string, status: string, detail: string) => emit('step', { id, status, detail });
   const random = rng(Number(from.replaceAll('-', '')));
-  const span = to ? Math.max(7, Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000) + 1) : 31;
+  const span = to ? Math.max(7, daysBetween(from, to) + 1) : 31;
 
   step('signin', 'active', 'Opening sample data');
   await wait(350);
   step('signin', 'done', 'Sample data, not NKERP');
   step('tours', 'active', 'Making up approved Najaf tours');
 
-  const groups = [];
+  const groups: Group[] = [];
   const sizes = [4, 6, 8, 9, 10, 12, 14, 16, 18, 20, 22, 24, 26, 30, 34, 38, 45];
   const count = Math.round(span * 1.15);
   for (let i = 0; i < count; i += 1) {
@@ -42,14 +61,14 @@ export async function runSample({ from, to = null, emit = () => {} }) {
     const checkOut = addDays(checkIn, nights);
     const secondLeg = random() < 0.62;
     const route = random();
-    const departure =
+    const departure: Group['departure'] =
       !secondLeg
-        ? { kind: 'transfer', place: 'KARBALA', flight: null }
+        ? { kind: 'transfer', place: 'KARBALA', flight: null, airline: null }
         : route < 0.45
-          ? { kind: 'airport', place: 'Najaf Airport', flight: random() < 0.5 ? 'IA 441' : 'IA 449' }
+          ? { kind: 'airport', place: 'Najaf Airport', flight: random() < 0.5 ? 'IA 441' : 'IA 449', airline: null }
           : route < 0.7
-            ? { kind: 'airport', place: 'Najaf Airport', flight: random() < 0.5 ? 'G9 374' : 'FZ 222' }
-            : { kind: 'airport', place: 'Baghdad Airport', flight: random() < 0.5 ? 'MS 628' : 'RJ 841' };
+            ? { kind: 'airport', place: 'Najaf Airport', flight: random() < 0.5 ? 'G9 374' : 'FZ 222', airline: null }
+            : { kind: 'airport', place: 'Baghdad Airport', flight: random() < 0.5 ? 'MS 628' : 'RJ 841', airline: null };
     departure.airline = airlineOf(departure.flight);
     const pax = sizes[Math.floor(random() * sizes.length)];
     const tourNo = String(4100 + i * 7 + Math.floor(random() * 5));
@@ -85,7 +104,7 @@ export async function runSample({ from, to = null, emit = () => {} }) {
   emit('tours', { approved: kept.length, selfHoused: kept.length, guests: kept.reduce((s, g) => s + g.pax, 0) });
 
   const through = to ?? kept.reduce((max, g) => (g.checkOut > max ? g.checkOut : max), from);
-  const days = [];
+  const days: string[] = [];
   for (let d = from; d <= through; d = addDays(d, 1)) days.push(d);
   emit('days', { dates: days });
   step('transport', 'active', `Reading arrivals and departures for ${days.length} days`);

@@ -8,7 +8,7 @@ import { SettingsDrawer } from './components/SettingsDrawer';
 import { Brand } from './components/ui';
 import { exportPlan } from './lib/export';
 import { load, remove, save } from './lib/storage';
-import { emptyProgress, startPull, type PullProgress } from './lib/sync';
+import { checkServer, emptyProgress, startPull, type PullProgress, type ServerState } from './lib/sync';
 import { Groups } from './screens/Groups';
 import { Night } from './screens/Night';
 import { PlanView } from './screens/PlanView';
@@ -40,17 +40,15 @@ export function App() {
   const [view, setView] = useState<'groups' | 'plan'>('groups');
   const [progress, setProgress] = useState<PullProgress>(emptyProgress);
   const [error, setError] = useState<string | null>(null);
-  const [nkerpReady, setNkerpReady] = useState<boolean | null>(null);
+  const [server, setServer] = useState<ServerState>('checking');
+  const [source, setSource] = useState<'nkerp' | 'sample'>('nkerp');
   const [drawer, setDrawer] = useState(false);
   const [date, setDate] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const cancel = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    fetch('/api/health')
-      .then((r) => r.json())
-      .then((h: { nkerp: boolean }) => setNkerpReady(Boolean(h.nkerp)))
-      .catch(() => setNkerpReady(null));
+    checkServer().then(setServer);
   }, []);
   useEffect(() => save(KEY.inputs, typed), [typed]);
   useEffect(() => save(KEY.settings, settings), [settings]);
@@ -60,6 +58,7 @@ export function App() {
   const pull = useCallback(
     (source: 'nkerp' | 'sample') => {
       cancel.current?.();
+      setSource(source);
       setProgress(emptyProgress());
       setError(null);
       setScreen('pulling');
@@ -252,7 +251,8 @@ export function App() {
             }}
             onResume={dataset ? () => setScreen('app') : null}
             resumeLabel={dataset ? `Back to the plan from ${dayMonth(dataset.meta.from)}` : null}
-            nkerpReady={nkerpReady}
+            server={server}
+            source={source}
             progress={progress}
             error={error}
           />
