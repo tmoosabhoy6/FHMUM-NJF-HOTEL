@@ -289,56 +289,6 @@ button {
   color: var(--night-ink-2);
 }
 
-.field input.pass {
-  height: 46px;
-  padding: 0 12px;
-  border-radius: var(--r-control);
-  border: 1px solid var(--night-line);
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--night-ink);
-  font-size: 15px;
-  letter-spacing: 0.08em;
-  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
-}
-
-.field input.pass:hover {
-  border-color: #3a4f7d;
-  background: rgba(255, 255, 255, 0.07);
-}
-
-.field input.pass:focus {
-  outline: none;
-  border-color: var(--lamp);
-  box-shadow: 0 0 0 4px rgba(232, 184, 74, 0.16);
-}
-
-.remember {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  font-size: 14px;
-  color: var(--night-ink-2);
-  cursor: pointer;
-  margin-top: -6px;
-}
-
-.remember input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--lamp);
-  cursor: pointer;
-}
-
-.snapshot-note {
-  font-size: 13.5px;
-  color: #7f91b0;
-}
-
-.snapshot-note .linkish {
-  color: var(--night-ink-2);
-  font-size: 13.5px;
-}
-
 .night-warning {
   padding: 12px 14px;
   border-radius: var(--r-control);

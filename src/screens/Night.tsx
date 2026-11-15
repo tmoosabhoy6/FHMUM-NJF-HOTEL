@@ -2,8 +2,7 @@ import { motion } from 'motion/react';
 import { useMemo } from 'react';
 import { addDays, dayMonth, dayNumber, eachDate, fullDate, monthShort } from '../../shared/dates';
 import { Brand, Num } from '../components/ui';
-import type { SnapshotInfo } from '../lib/snapshot';
-import { STEP_ORDER, STEP_TITLE, type PullProgress, type ServerState, type Source } from '../lib/sync';
+import { STEP_ORDER, STEP_TITLE, type PullProgress, type ServerState } from '../lib/sync';
 
 interface Props {
   mode: 'start' | 'pulling' | 'failed';
@@ -11,31 +10,14 @@ interface Props {
   to: string;
   onFrom: (value: string) => void;
   onTo: (value: string) => void;
-  onPull: (source: Source) => void;
+  onPull: (source: 'nkerp' | 'sample') => void;
   onCancel: () => void;
   onResume: (() => void) | null;
   resumeLabel: string | null;
   server: ServerState;
-  source: Source;
-  /** Published NKERP data (GitHub Pages copy). */
-  snapshot: SnapshotInfo | null;
-  passphrase: string;
-  onPassphrase: (value: string) => void;
-  remember: boolean;
-  onRemember: (value: boolean) => void;
-  refreshUrl: string;
+  source: 'nkerp' | 'sample';
   progress: PullProgress;
   error: string | null;
-}
-
-/** "12 minutes ago", "3 hours ago", or the date. */
-export function ago(iso: string): string {
-  const minutes = Math.round((Date.now() - Date.parse(iso)) / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
-  return fullDate(iso.slice(0, 10));
 }
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -91,7 +73,7 @@ function Facade({ dates, progress, pulling }: { dates: string[]; progress: PullP
 }
 
 export function Night(props: Props) {
-  const { mode, from, to, progress, error, snapshot } = props;
+  const { mode, from, to, progress, error } = props;
   const pulling = mode === 'pulling';
   const previewDates = useMemo(() => {
     if (progress.dates.length) return progress.dates;
@@ -125,7 +107,7 @@ export function Night(props: Props) {
         <div className="night-copy">
           {pulling ? (
             <motion.div key="pulling" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-              <h1>{props.source === 'sample' ? 'Making sample groups' : props.source === 'snapshot' ? 'Opening NKERP data' : 'Reading NKERP'}</h1>
+              <h1>{props.source === 'sample' ? 'Making sample groups' : 'Reading NKERP'}</h1>
               <p className="lede">
                 From {fullDate(from)}
                 {to ? ` to ${fullDate(to)}` : ', as far ahead as tours are approved'}.
@@ -170,39 +152,20 @@ export function Night(props: Props) {
                 className="pull-form"
                 onSubmit={(e) => {
                   e.preventDefault();
-                  props.onPull(snapshot ? 'snapshot' : 'nkerp');
+                  props.onPull('nkerp');
                 }}
               >
                 <div className="dates">
                   <label className="field">
                     First night
-                    <input type="date" value={from} required min={snapshot?.from} max={snapshot?.through} onChange={(e) => props.onFrom(e.target.value)} />
+                    <input type="date" value={from} required onChange={(e) => props.onFrom(e.target.value)} />
                   </label>
                   <label className="field">
                     Last night
-                    <input type="date" value={to} min={from} max={snapshot?.through} onChange={(e) => props.onTo(e.target.value)} />
+                    <input type="date" value={to} min={from} onChange={(e) => props.onTo(e.target.value)} />
                     <small>{to ? `Through ${dayMonth(to)}` : 'Empty: everything approved so far'}</small>
                   </label>
                 </div>
-                {snapshot ? (
-                  <>
-                    <label className="field">
-                      Team passphrase
-                      <input
-                        className="pass"
-                        type="password"
-                        value={props.passphrase}
-                        required
-                        autoComplete="current-password"
-                        onChange={(e) => props.onPassphrase(e.target.value)}
-                      />
-                    </label>
-                    <label className="remember">
-                      <input type="checkbox" checked={props.remember} onChange={(e) => props.onRemember(e.target.checked)} />
-                      Remember on this device
-                    </label>
-                  </>
-                ) : null}
                 {mode === 'failed' && error ? (
                   <p className="night-warning night-error" role="alert">
                     {error}
@@ -212,22 +175,13 @@ export function Night(props: Props) {
                   <p className="night-warning">
                     NKERP sign-in is not set up on the server. Add NKERP_LOGIN_ID and NKERP_PASSWORD to its settings, then reload.
                   </p>
-                ) : props.server === 'no-server' && !snapshot ? (
+                ) : props.server === 'no-server' ? (
                   <p className="night-warning">
-                    This copy of the app is not connected to the NKERP server, so it can only show sample groups for now.
+                    The NKERP connection is not reachable right now, so only sample groups are available. Reload to try again.
                   </p>
                 ) : null}
                 <div className="night-aside">
-                  {snapshot ? (
-                    <>
-                      <button className="lamp-button" type="submit" disabled={!from || !props.passphrase}>
-                        Open the plan
-                      </button>
-                      <button className="linkish" type="button" onClick={() => props.onPull('sample')}>
-                        Try with sample groups
-                      </button>
-                    </>
-                  ) : props.server === 'no-server' ? (
+                  {props.server === 'no-server' ? (
                     <button className="lamp-button" type="button" disabled={!from} onClick={() => props.onPull('sample')}>
                       Try with sample groups
                     </button>
@@ -242,16 +196,6 @@ export function Night(props: Props) {
                     </>
                   )}
                 </div>
-                {snapshot ? (
-                  <p className="snapshot-note">
-                    NKERP data from {ago(snapshot.fetchedAt)}, refreshed every hour.{' '}
-                    {props.refreshUrl ? (
-                      <a className="linkish" href={props.refreshUrl} target="_blank" rel="noreferrer">
-                        Refresh it now
-                      </a>
-                    ) : null}
-                  </p>
-                ) : null}
               </form>
             </motion.div>
           )}

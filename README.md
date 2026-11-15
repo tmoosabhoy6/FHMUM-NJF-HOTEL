@@ -13,34 +13,21 @@ cp .env.example .env      # then fill in NKERP_LOGIN_ID and NKERP_PASSWORD
 npm run dev               # http://localhost:8787
 ```
 
-For a deployed copy: `npm run build && npm start`, with the two NKERP values
-set as secrets on the host. The NKERP login stays on the server; the browser
-never sees it. `.env` is git-ignored.
+### Live site (Cloudflare)
 
-### GitHub Pages (free)
+<https://najaf-stays.tmoosabhoy6.workers.dev> runs on Cloudflare Workers
+(`worker/index.mjs`, `wrangler.jsonc`). The Worker serves the app and runs the
+NKERP pull. The NKERP login is stored as two Worker secrets, `NKERP_LOGIN_ID`
+and `NKERP_PASSWORD`, which stay in place across deploys. The app has no
+login of its own: anyone with the link can use it.
 
-<https://tmoosabhoy6.github.io/FHMUM-NJF-HOTEL/> is deployed by
-`.github/workflows/pages.yml` on every push to `main`, every hour, and
-whenever "Run workflow" is pressed on the workflow's page.
+`npm run build` builds the app and bundles it into the Worker
+(`scripts/embed-assets.mjs`); `npm run deploy` builds and deploys.
 
-Pages only hosts files, and NKERP accepts its login only from its own site, so
-the pull runs in GitHub Actions instead. Each run signs in to NKERP, pulls
-every group from today onward, encrypts the result with the team passphrase
-and publishes it next to the app as `data.json`. The app asks for the
-passphrase and unlocks the data in the browser. The site is public, so the
-data is never published unencrypted.
-
-Add three repository secrets (Settings → Secrets and variables → Actions):
-
-| Secret | Value |
-| --- | --- |
-| `NKERP_LOGIN_ID` | NKERP login |
-| `NKERP_PASSWORD` | NKERP password |
-| `DATA_PASSPHRASE` | A long passphrase the team types to open the plan |
-
-Without them the site still deploys, with sample groups only. If a pull fails,
-the previous data is kept. GitHub pauses hourly runs in a repository with no
-activity for 60 days; pressing "Run workflow" or pushing a commit resumes them.
+To deploy automatically on every push to `main`, connect the repo once in the
+Cloudflare dashboard: Workers & Pages → najaf-stays → Settings → Build →
+Connect, branch `main`, build command `npm run build`, deploy command
+`npx wrangler deploy`.
 
 `npm test` runs the planner and NKERP-reading tests.
 
@@ -90,8 +77,6 @@ Capacities (Ruya 97, Araf 100) are in the same file.
 Read-only. `server/nkerp/client.mjs` can only call an explicit list of
 list/search endpoints; there is no save, release or email call in the code.
 
-## Before deploying
+## Saved on each device
 
-The app has no sign-in of its own. Anyone who can open the URL can read the
-group list, so put it behind your host's access control before sharing it.
 Typed rooms and hotel choices are saved in the browser, per device.

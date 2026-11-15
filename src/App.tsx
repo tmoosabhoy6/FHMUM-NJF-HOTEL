@@ -8,8 +8,7 @@ import { SettingsDrawer } from './components/SettingsDrawer';
 import { Brand } from './components/ui';
 import { exportPlan } from './lib/export';
 import { load, remove, save } from './lib/storage';
-import { findSnapshot, REFRESH_URL, startSnapshot, type SnapshotInfo } from './lib/snapshot';
-import { checkServer, emptyProgress, startPull, type PullProgress, type ServerState, type Source } from './lib/sync';
+import { checkServer, emptyProgress, startPull, type PullProgress, type ServerState } from './lib/sync';
 import { Groups } from './screens/Groups';
 import { Night } from './screens/Night';
 import { PlanView } from './screens/PlanView';
@@ -19,7 +18,7 @@ interface Dataset {
   meta: PullMeta;
 }
 
-const KEY = { data: 'njf.dataset.v1', inputs: 'njf.inputs.v1', settings: 'njf.settings.v1', range: 'njf.range.v1', pass: 'njf.passphrase.v1' };
+const KEY = { data: 'njf.dataset.v1', inputs: 'njf.inputs.v1', settings: 'njf.settings.v1', range: 'njf.range.v1' };
 /** Typed rooms are kept per tour, so they survive a new pull and a reissued plan. */
 const inputKey = (group: Group) => String(group.tourId);
 
@@ -42,24 +41,14 @@ export function App() {
   const [progress, setProgress] = useState<PullProgress>(emptyProgress);
   const [error, setError] = useState<string | null>(null);
   const [server, setServer] = useState<ServerState>('checking');
-  const [source, setSource] = useState<Source>('nkerp');
-  const [snapshot, setSnapshot] = useState<SnapshotInfo | null>(null);
-  const [passphrase, setPassphrase] = useState<string>(() => load(KEY.pass, ''));
-  const [remember, setRemember] = useState<boolean>(() => Boolean(load(KEY.pass, '')));
+  const [source, setSource] = useState<'nkerp' | 'sample'>('nkerp');
   const [drawer, setDrawer] = useState(false);
   const [date, setDate] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const cancel = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    checkServer().then(async (state) => {
-      setServer(state);
-      // No server (the GitHub Pages copy): use the NKERP data GitHub Actions publishes.
-      if (state !== 'no-server') return;
-      const info = await findSnapshot();
-      setSnapshot(info);
-      if (info) setRange((r) => (r.from < info.from || r.from > info.through ? { from: info.from, to: '' } : r));
-    });
+    checkServer().then(setServer);
   }, []);
   useEffect(() => save(KEY.inputs, typed), [typed]);
   useEffect(() => save(KEY.settings, settings), [settings]);
@@ -67,22 +56,18 @@ export function App() {
   useEffect(() => () => cancel.current?.(), []);
 
   const pull = useCallback(
-    (source: Source) => {
+    (source: 'nkerp' | 'sample') => {
       cancel.current?.();
       setSource(source);
       setProgress(emptyProgress());
       setError(null);
       setScreen('pulling');
-      const handlers = {
-          onProgress: (update: (p: PullProgress) => PullProgress) => setProgress(update),
-          onDone: (result: Dataset) => {
-            // Unlocked NKERP data stays on the device only when the person asked to be remembered.
-            if (source !== 'snapshot' || remember) save(KEY.data, result);
-            else remove(KEY.data);
-            if (source === 'snapshot') {
-              if (remember) save(KEY.pass, passphrase);
-              else remove(KEY.pass);
-            }
+      cancel.current = startPull(
+        { from: range.from, to: range.to || null, source },
+        {
+          onProgress: (update) => setProgress(update),
+          onDone: (result) => {
+            save(KEY.data, result);
             // Let the last windows light before the night lifts.
             window.setTimeout(() => {
               setDataset(result);
@@ -91,16 +76,14 @@ export function App() {
               setScreen('app');
             }, 900);
           },
-          onFailed: (message: string) => {
+          onFailed: (message) => {
             setError(message);
             setScreen('failed');
           },
-      };
-      const params = { from: range.from, to: range.to || null };
-      cancel.current =
-        source === 'snapshot' ? startSnapshot({ ...params, passphrase }, handlers) : startPull({ ...params, source }, handlers);
+        },
+      );
     },
-    [range, passphrase, remember],
+    [range],
   );
 
   const groups = dataset?.groups ?? [];
@@ -174,7 +157,7 @@ export function App() {
                     setScreen('start');
                   }}
                 >
-                  {snapshot ? 'Change dates' : 'Pull again'}
+                  Pull again
                 </button>
                 <button className="btn" onClick={() => setDrawer(true)}>
                   Hotels and rooms
@@ -270,12 +253,6 @@ export function App() {
             resumeLabel={dataset ? `Back to the plan from ${dayMonth(dataset.meta.from)}` : null}
             server={server}
             source={source}
-            snapshot={snapshot}
-            passphrase={passphrase}
-            onPassphrase={setPassphrase}
-            remember={remember}
-            onRemember={setRemember}
-            refreshUrl={REFRESH_URL}
             progress={progress}
             error={error}
           />

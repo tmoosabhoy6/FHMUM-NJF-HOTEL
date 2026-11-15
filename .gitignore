@@ -5,3 +5,8 @@ dist/
 !.env.example
 *.log
 .DS_Store
+
+# Wrangler local state
+.wrangler/
+.dev.vars
+worker/assets.generated.mjs

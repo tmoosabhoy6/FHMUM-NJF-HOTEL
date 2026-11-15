@@ -6,10 +6,12 @@
   "description": "Hotel planning for FH Mumbai groups in Najaf: pulls approved tours from NKERP and allocates them across Ruya, Araf and Hotel C.",
   "scripts": {
     "dev": "node --env-file-if-exists=.env server/index.mjs --dev",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && node scripts/embed-assets.mjs",
     "start": "node --env-file-if-exists=.env server/index.mjs",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "deploy": "npm run build && wrangler deploy",
+    "cf:dev": "npm run build && wrangler dev"
   },
   "engines": {
     "node": ">=22.9"
@@ -29,6 +31,7 @@
     "@vitejs/plugin-react": "^6.3.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.0",
+    "wrangler": "^4.162.0"
   }
 }

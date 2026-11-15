@@ -1,19 +1,12 @@
 import { runSample } from '../../shared/sample';
 import type { Group, PullMeta } from '../../shared/types';
 
-/**
- * Where the NKERP server lives. Empty means the same site (npm run dev /
- * npm start). A static copy such as GitHub Pages sets VITE_API_URL at build
- * time; with no server at all, only sample groups are available.
- */
-export const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
 
 export type ServerState = 'checking' | 'ready' | 'no-login' | 'no-server';
-export type Source = 'nkerp' | 'sample' | 'snapshot';
 
 export async function checkServer(): Promise<ServerState> {
   try {
-    const response = await fetch(`${API_URL}/api/health`, { signal: AbortSignal.timeout(8000) });
+    const response = await fetch('/api/health', { signal: AbortSignal.timeout(8000) });
     if (!response.ok || !response.headers.get('content-type')?.includes('json')) return 'no-server';
     const health = (await response.json()) as { nkerp?: boolean };
     return health.nkerp ? 'ready' : 'no-login';
@@ -72,7 +65,7 @@ export function startPull(params: { from: string; to: string | null; source: 'nk
   if (params.source === 'sample') return startSample(params, handlers);
   const query = new URLSearchParams({ from: params.from });
   if (params.to) query.set('to', params.to);
-  const stream = new EventSource(`${API_URL}/api/sync?${query}`);
+  const stream = new EventSource(`/api/sync?${query}`);
   let finished = false;
   const on = <T,>(name: string, fn: (data: T) => void) =>
     stream.addEventListener(name, (event) => fn(JSON.parse((event as MessageEvent).data) as T));

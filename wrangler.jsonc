@@ -1,0 +1,12 @@
+{
+  // Cloudflare Worker that serves the app and the read-only NKERP API.
+  // `npm run build` bundles dist/ into the Worker (worker/assets.generated.mjs).
+  // Secrets (set once, kept across deploys): NKERP_LOGIN_ID, NKERP_PASSWORD
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "najaf-stays",
+  "main": "worker/index.mjs",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": true }
+}

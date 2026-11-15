@@ -48,7 +48,8 @@ export class NkerpClient {
     this.baseUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
     this.origin = new URL(this.baseUrl).origin;
     this.timeoutMs = timeoutMs;
-    this.fetch = fetchImpl;
+    // Called as a plain function: Cloudflare Workers reject fetch with another `this`.
+    this.fetch = (url, init) => fetchImpl(url, init);
     this.userId = null;
     this.groupId = null;
     this.requests = 0;
@@ -63,7 +64,13 @@ export class NkerpClient {
   }
 
   #storeCookies(response) {
-    const list = typeof response.headers.getSetCookie === 'function' ? response.headers.getSetCookie() : [];
+    const headers = response.headers;
+    const list =
+      typeof headers.getSetCookie === 'function'
+        ? headers.getSetCookie()
+        : typeof headers.getAll === 'function'
+          ? headers.getAll('Set-Cookie')
+          : (headers.get('set-cookie') ?? '').split(/,(?=\s*[^;=,\s]+=)/);
     for (const line of list) {
       const pair = line.split(';', 1)[0];
       const eq = pair.indexOf('=');
@@ -93,6 +100,7 @@ export class NkerpClient {
       });
     } catch (error) {
       if (signal?.aborted) throw error;
+      console.error('[nkerp] request failed', path, error?.name, error?.message, error?.cause?.message ?? '');
       throw new NkerpError(`NKERP did not answer (${error?.name === 'TimeoutError' ? 'timed out' : 'network error'})`, {
         status: 504,
         code: 'unreachable',
@@ -173,12 +181,16 @@ export class NkerpClient {
 
 let shared = null;
 
-/** One client per server process so the NKERP session is reused across pulls. */
-export function sharedClient() {
-  shared ??= new NkerpClient({
-    loginId: process.env.NKERP_LOGIN_ID,
-    password: process.env.NKERP_PASSWORD,
-    baseUrl: process.env.NKERP_BASE_URL || DEFAULT_BASE,
-  });
+/**
+ * One client per server process (or Worker isolate) so the NKERP session is
+ * reused across pulls. `env` holds NKERP_LOGIN_ID / NKERP_PASSWORD: process.env
+ * on Node, the Worker's secrets on Cloudflare.
+ */
+export function sharedClient(env = globalThis.process?.env ?? {}) {
+  const loginId = env.NKERP_LOGIN_ID;
+  if (!shared || shared.loginId !== loginId) {
+    shared = new NkerpClient({ loginId, password: env.NKERP_PASSWORD, baseUrl: env.NKERP_BASE_URL || DEFAULT_BASE });
+    shared.loginId = loginId;
+  }
   return shared;
 }

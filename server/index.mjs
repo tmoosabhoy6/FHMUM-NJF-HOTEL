@@ -28,25 +28,6 @@ const MIME = {
   '.ico': 'image/x-icon',
 };
 
-/**
- * Origins allowed to call this API from another site, e.g. the GitHub Pages
- * copy of the app: ALLOWED_ORIGINS=https://tmoosabhoy6.github.io
- */
-const ALLOWED_ORIGINS = new Set(
-  (process.env.ALLOWED_ORIGINS ?? '')
-    .split(',')
-    .map((o) => o.trim().replace(/\/$/, ''))
-    .filter(Boolean),
-);
-
-function cors(req, res) {
-  const origin = req.headers.origin;
-  if (origin && ALLOWED_ORIGINS.has(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
-  }
-}
-
 function json(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(JSON.stringify(body));
@@ -90,11 +71,6 @@ async function handleSync(req, res, url) {
 }
 
 async function handleApi(req, res, url) {
-  cors(req, res);
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204, { 'Access-Control-Allow-Methods': 'GET', 'Access-Control-Max-Age': '600' });
-    return res.end();
-  }
   if (req.method !== 'GET') return json(res, 405, { error: 'Read-only API' });
   if (url.pathname === '/api/health') {
     return json(res, 200, { ok: true, nkerp: sharedClient().configured, office: OFFICE });
