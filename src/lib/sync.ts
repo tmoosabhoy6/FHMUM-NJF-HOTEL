@@ -9,6 +9,7 @@ import type { Group, PullMeta } from '../../shared/types';
 export const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
 
 export type ServerState = 'checking' | 'ready' | 'no-login' | 'no-server';
+export type Source = 'nkerp' | 'sample' | 'snapshot';
 
 export async function checkServer(): Promise<ServerState> {
   try {

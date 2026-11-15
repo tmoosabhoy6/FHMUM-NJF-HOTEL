@@ -17,19 +17,30 @@ For a deployed copy: `npm run build && npm start`, with the two NKERP values
 set as secrets on the host. The NKERP login stays on the server; the browser
 never sees it. `.env` is git-ignored.
 
-### GitHub Pages
+### GitHub Pages (free)
 
-Every push to `main` deploys the app to
-<https://tmoosabhoy6.github.io/FHMUM-NJF-HOTEL/> (`.github/workflows/pages.yml`).
+<https://tmoosabhoy6.github.io/FHMUM-NJF-HOTEL/> is deployed by
+`.github/workflows/pages.yml` on every push to `main`, every hour, and
+whenever "Run workflow" is pressed on the workflow's page.
 
-Pages only hosts files, and NKERP accepts its login cookie only from its own
-site, so the Pages copy cannot read NKERP by itself. On its own it offers
-sample groups. To pull live data there:
+Pages only hosts files, and NKERP accepts its login only from its own site, so
+the pull runs in GitHub Actions instead. Each run signs in to NKERP, pulls
+every group from today onward, encrypts the result with the team passphrase
+and publishes it next to the app as `data.json`. The app asks for the
+passphrase and unlocks the data in the browser. The site is public, so the
+data is never published unencrypted.
 
-1. Run the server somewhere (`npm start` with `NKERP_LOGIN_ID`,
-   `NKERP_PASSWORD` and `ALLOWED_ORIGINS=https://tmoosabhoy6.github.io`).
-2. In the repo, add an Actions variable `NKERP_API_URL` set to that server's
-   address, then re-run the Pages workflow.
+Add three repository secrets (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+| --- | --- |
+| `NKERP_LOGIN_ID` | NKERP login |
+| `NKERP_PASSWORD` | NKERP password |
+| `DATA_PASSPHRASE` | A long passphrase the team types to open the plan |
+
+Without them the site still deploys, with sample groups only. If a pull fails,
+the previous data is kept. GitHub pauses hourly runs in a repository with no
+activity for 60 days; pressing "Run workflow" or pushing a commit resumes them.
 
 `npm test` runs the planner and NKERP-reading tests.
 

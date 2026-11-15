@@ -1,8 +1,18 @@
 name: Deploy to GitHub Pages
 
+# Builds the app and publishes it with a fresh, encrypted NKERP pull.
+# Runs on every push to main, every hour, and when "Run workflow" is pressed.
+#
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   NKERP_LOGIN_ID, NKERP_PASSWORD  NKERP account used to read tours
+#   DATA_PASSPHRASE                  team passphrase that unlocks the data in the app
+# Without them the site still deploys, with sample groups only.
+
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '23 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -12,11 +22,16 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      NKERP_LOGIN_ID: ${{ secrets.NKERP_LOGIN_ID }}
+      NKERP_PASSWORD: ${{ secrets.NKERP_PASSWORD }}
+      DATA_PASSPHRASE: ${{ secrets.DATA_PASSPHRASE }}
+      SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,8 +43,22 @@ jobs:
       - run: npm run build
         env:
           VITE_BASE: /${{ github.event.repository.name }}/
-          # Address of the NKERP server once one is running (Settings → Secrets and variables → Actions → Variables).
+          VITE_REFRESH_URL: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/pages.yml
+          # Optional: address of a live NKERP server (Actions variable). Leave unset to use the hourly data.
           VITE_API_URL: ${{ vars.NKERP_API_URL }}
+
+      - name: Pull NKERP
+        id: pull
+        if: env.NKERP_LOGIN_ID != '' && env.NKERP_PASSWORD != '' && env.DATA_PASSPHRASE != ''
+        continue-on-error: true
+        run: node scripts/snapshot.mjs dist/data.json
+
+      - name: Keep the last good data if the pull failed
+        if: steps.pull.outcome == 'failure'
+        run: |
+          echo "::warning::NKERP pull failed; republishing the previous data."
+          curl -fsS "${SITE_URL}data.json" -o dist/data.json || echo "::warning::No previous data to keep."
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
