@@ -35,7 +35,11 @@ function ago(iso: string): string {
 
 export function App() {
   const [dataset, setDataset] = useState<Dataset | null>(() => load<Dataset | null>(KEY.data, null));
+  // What staff have typed (shown in the Groups table straight away) and what the plan was last built from.
+  // The plan only changes when "Refresh plan" copies the one into the other.
   const [typed, setTyped] = useState<Record<string, GroupInput>>(() => load(KEY.inputs, {}));
+  const [applied, setApplied] = useState<Record<string, GroupInput>>(() => load(KEY.inputs, {}));
+  const [refreshed, setRefreshed] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>(() => ({ ...DEFAULT_PREFS, ...load<Partial<Prefs>>(KEY.prefs, {}) }));
   const [range, setRange] = useState(() => load(KEY.range, { from: PLANNING_START, to: '' }));
   const [screen, setScreen] = useState<'start' | 'pulling' | 'failed' | 'app'>(() => (load<Dataset | null>(KEY.data, null) ? 'app' : 'start'));
@@ -98,13 +102,25 @@ export function App() {
 
   const groups = useMemo(() => dataset?.groups ?? [], [dataset]);
   const inputs = useMemo(() => Object.fromEntries(groups.map((g) => [g.id, typed[inputKey(g)]])), [groups, typed]);
+  const appliedInputs = useMemo(() => Object.fromEntries(groups.map((g) => [g.id, applied[inputKey(g)]])), [groups, applied]);
   const plan = useMemo(
     () =>
       dataset
-        ? buildPlan({ groups, inputs, settings, holds: OPENING_BALANCE, from: dataset.meta.from, to: dataset.meta.to, start: PLANNING_START })
+        ? buildPlan({ groups, inputs: appliedInputs, settings, holds: OPENING_BALANCE, from: dataset.meta.from, to: dataset.meta.to, start: PLANNING_START })
         : null,
-    [dataset, groups, inputs, settings],
+    [dataset, groups, appliedInputs, settings],
   );
+  /** Tours whose typed rooms or hotel differ from what the plan was built with. */
+  const pending = useMemo(() => {
+    // Only tours in this pull can change the plan.
+    const keys = new Set(groups.map(inputKey));
+    return [...keys].filter((k) => JSON.stringify(typed[k] ?? {}) !== JSON.stringify(applied[k] ?? {})).length;
+  }, [groups, typed, applied]);
+  const refresh = useCallback(() => {
+    setApplied(typed);
+    setRefreshed(true);
+    window.setTimeout(() => setRefreshed(false), 2400);
+  }, [typed]);
 
   const onInput = useCallback((tourNo: string, patch: GroupInput) => {
     const key = inputKey({ tourNo });
@@ -139,6 +155,10 @@ export function App() {
                 Pulled {ago(dataset.meta.fetchedAt)}
               </div>
               <div className="top-actions">
+                <button className="btn refresh" data-pending={pending > 0} onClick={refresh} title="Rebuild the plan with the room requests and choices made since the last refresh">
+                  {refreshed && !pending ? 'Plan refreshed' : 'Refresh plan'}
+                  {pending ? <span className="badge">{pending}</span> : null}
+                </button>
                 <button className="btn" onClick={() => setPanel('requests')}>
                   Room requests
                 </button>
@@ -172,6 +192,27 @@ export function App() {
               </div>
             </div>
           </header>
+          <AnimatePresence initial={false}>
+            {pending ? (
+              <motion.div
+                key="pending"
+                className="pending-bar"
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="pending-inner">
+                  <span>
+                    Room requests or hotel choices changed for {pending} {pending === 1 ? 'tour' : 'tours'}. The plan below does not include them yet.
+                  </span>
+                  <button className="btn solid" onClick={refresh}>
+                    Refresh plan
+                  </button>
+                </div>
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
           {dataset.meta.source === 'sample' ? (
             <div className="banner">Sample groups, not NKERP. Pull again to load the real tours.</div>
           ) : null}
@@ -196,6 +237,7 @@ export function App() {
             typedCount={Object.keys(typed).length}
             onClearInputs={() => {
               setTyped({});
+              setApplied({});
               remove(KEY.inputs);
             }}
           />

@@ -65,6 +65,42 @@ export const isNajafAirport = (port) => /NAJAF/.test(upper(port)) && /AIR/.test(
 
 export const isApprovedTour = (row) => row?.IsActive !== false && APPROVED_STATUSES.has(upper(row?.Status));
 
+/** Tours that may still come: neither deleted nor rejected. */
+export const isLiveTour = (row) => row?.IsActive !== false && !/DELETED|REJECTED|CANCEL/.test(upper(row?.Status));
+
+/**
+ * A tour that was approved, then updated, waits for re-approval: General
+ * search lists it as Pending with no plans, and every version of its plans is
+ * marked inactive. The most recent version (the plans saved last, together)
+ * holds its current dates. Returns a General-search-shaped row built from the
+ * tour's sub-venue plans, or null when the tour is not awaiting re-approval
+ * or has no plans.
+ */
+export function reapprovalRow(row, tourPlan) {
+  if (!tourPlan?.IsReApproval) return null;
+  const plans = (tourPlan.TourSubvenuePlan ?? []).filter((p) => p && !p.IsRemoved && p.StartDateTimeZone && p.EndDateTimeZone);
+  if (!plans.length) return null;
+  const active = plans.filter((p) => p.IsActive !== false);
+  let latest = active;
+  if (!active.length) {
+    const newest = plans.reduce((max, p) => (String(p.CreatedOn) > max ? String(p.CreatedOn) : max), '');
+    const cutoff = Date.parse(newest) - 60_000; // plans saved together share a timestamp, give or take
+    latest = plans.filter((p) => Date.parse(String(p.CreatedOn)) >= cutoff);
+  }
+  return {
+    ...row,
+    TourId: row?.TourId ?? tourPlan.Id,
+    ReferenceNo: row?.ReferenceNo ?? tourPlan.ReferenceNo,
+    Status: 'Awaiting re-approval',
+    EntryPort: row?.EntryPort ?? tourPlan.EntryPortName,
+    ExitPort: row?.ExitPort ?? tourPlan.ExitPortName,
+    PaxCount: row?.PaxCount ?? tourPlan.PaxCount,
+    lstTransportItinerary: row?.lstTransportItinerary?.length ? row.lstTransportItinerary : (tourPlan.TransportItinerary ?? []),
+    lstSubVenuePlan: latest.map((p) => ({ ...p, IsActive: true })),
+    reapproval: true,
+  };
+}
+
 const activePlans = (row) =>
   (row?.lstSubVenuePlan ?? [])
     .filter((p) => p && p.IsActive !== false && !p.IsRemoved && p.StartDateTimeZone && p.EndDateTimeZone)
@@ -127,7 +163,7 @@ export function staysFromGroupRow(row) {
       arrival,
       departure,
       secondLeg: arrival.kind === 'transfer' && arrival.place === KARBALA,
-      notes: [],
+      notes: row.reapproval ? ['Updated in NKERP and awaiting re-approval: planned with its latest dates.'] : [],
     });
   });
   return stays;

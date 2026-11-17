@@ -47,6 +47,8 @@ export interface PullMeta {
   nkerpHousedOnly: number;
   /** Tours in the range that are not approved yet (Pending, Draft…), so not planned. */
   notApproved: number;
+  /** Approved tours that were updated and await re-approval; planned with their latest dates. */
+  reapproval?: number;
   /** Guest lists read, one per tour. */
   toursRead: number;
   requests: number;

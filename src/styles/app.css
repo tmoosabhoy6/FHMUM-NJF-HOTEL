@@ -661,6 +661,54 @@ button {
   transform: none;
 }
 
+.btn.refresh[data-pending='true'] {
+  background: var(--ruya);
+  border-color: var(--ruya);
+  color: #fff;
+}
+
+.btn.refresh[data-pending='true']:hover {
+  background: var(--ruya-ink);
+}
+
+.btn .badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ruya-ink);
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+}
+
+.pending-bar {
+  position: sticky;
+  top: 62px;
+  z-index: 19;
+  overflow: hidden;
+  background: var(--ruya-soft);
+  border-bottom: 1px solid color-mix(in srgb, var(--ruya) 25%, transparent);
+  color: var(--ruya-ink);
+}
+
+.pending-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 8px 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pending-inner .btn {
+  height: 32px;
+}
+
 .banner {
   background: var(--araf-soft);
   color: var(--araf-ink);
@@ -1939,6 +1987,13 @@ button {
   }
   .page {
     padding: 24px 16px 70px;
+  }
+  .pending-bar {
+    position: static;
+  }
+  .pending-inner {
+    padding: 8px 16px;
+    flex-wrap: wrap;
   }
   .block {
     margin-top: 36px;

@@ -512,7 +512,8 @@ export function PlanView({ groups, plan, meta, inputs, onInput, onOpenRequests }
             <button className="linkish" onClick={onOpenRequests}>
               Paste room requests
             </button>{' '}
-            or type them as bed size × rooms (2x6 is six 2-bed rooms). “Choose rooms” picks exact Ruya rooms by hand.
+            or type them as bed size × rooms (2x6 is six 2-bed rooms). “Choose rooms” picks exact Ruya rooms by hand. Then press{' '}
+            <b>Refresh plan</b> to rebuild the plan with them.
           </p>
         </div>
         <GroupsTable list={planned} plan={plan} inputs={inputs} onInput={onInput} onPick={setPicking} />

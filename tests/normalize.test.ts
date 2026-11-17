@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module shared with the server
 import { isAllowedRead } from '../server/nkerp/client.mjs';
 // @ts-expect-error plain JS module shared with the server
-import { airlineOf, countGuests, endDateOf, isApprovedTour, staysFromGroupRow, withGuests } from '../server/nkerp/normalize.mjs';
+import { airlineOf, countGuests, endDateOf, isApprovedTour, reapprovalRow, staysFromGroupRow, withGuests } from '../server/nkerp/normalize.mjs';
 // @ts-expect-error plain JS module shared with the server
 import { runSync } from '../server/nkerp/sync.mjs';
 
@@ -104,6 +104,30 @@ describe('reading a tour from General search', () => {
   });
 });
 
+describe('tours awaiting re-approval', () => {
+  // Shaped like tour 2217: approved, updated, now Pending with every plan version inactive.
+  const plans = [
+    plan(1, 'KARBALA', '2026-11-26', '2026-11-30T23:59:59.997', { IsActive: false, CreatedOn: '2026-11-05T15:01:55.68' }),
+    plan(2, 'NAJAF', '2026-12-01', '2026-12-06T00:00:00', { IsActive: false, CreatedOn: '2026-11-05T15:01:55.68' }),
+    plan(3, 'KARBALA', '2026-11-26', '2026-12-01T23:59:59.997', { IsActive: false, CreatedOn: '2026-11-10T09:51:43.623' }),
+    plan(4, 'NAJAF', '2026-12-02', '2026-12-06T00:00:00', { IsActive: false, CreatedOn: '2026-11-10T09:51:43.623' }),
+    plan(5, 'KARBALA', '2026-11-26', '2026-11-30T23:59:59.997', { IsActive: false, CreatedOn: '2026-11-12T07:06:10.1' }),
+    plan(6, 'NAJAF', '2026-12-01', '2026-12-06T00:00:00', { IsActive: false, CreatedOn: '2026-11-12T07:06:10.1' }),
+  ];
+  const pendingRow = tourRow({ Status: 'Pending', lstSubVenuePlan: [], ExitPort: 'Baghdad Airport' });
+  it('plans it from the newest version of its plans, arriving from Karbala', () => {
+    const row = reapprovalRow(pendingRow, { IsReApproval: true, TourSubvenuePlan: plans });
+    const stays = staysFromGroupRow(row);
+    expect(stays).toHaveLength(1);
+    expect(stays[0]).toMatchObject({ id: '5001:6', checkIn: '2026-12-01', checkOut: '2026-12-06', secondLeg: true, arrival: { kind: 'transfer', place: 'KARBALA' }, status: 'Awaiting re-approval' });
+    expect(stays[0].notes.join(' ')).toMatch(/awaiting re-approval/);
+  });
+  it('leaves out a pending tour that was never approved', () => {
+    expect(reapprovalRow(pendingRow, { IsReApproval: false, TourSubvenuePlan: plans })).toBeNull();
+    expect(reapprovalRow(pendingRow, { IsReApproval: true, TourSubvenuePlan: [] })).toBeNull();
+  });
+});
+
 describe('counting guests person by person', () => {
   const guests = [
     person({ IsLead: true, FirstName: 'Lead', LastName: 'Person', AccomodationOptionId: 2 }),
@@ -134,12 +158,13 @@ describe('NKERP stays read-only', () => {
     expect(isAllowedRead('api/tours/UpdateZiyaratStatus/1/false/4', 'GET')).toBe(false);
     expect(isAllowedRead('api/Property/saveRoomallocationApplicantsDetails', 'POST')).toBe(false);
     expect(isAllowedRead('api/tours/getApplicants/1', 'POST')).toBe(false);
+    expect(isAllowedRead('api/tours/getTourSubVenue/428789641', 'GET')).toBe(true);
   });
 });
 
 describe('the pull', () => {
   /** A stand-in for NKERP: one page of tours and a guest list per tour. */
-  function fakeClient(rows: Record<string, unknown>[], lists: Record<number, Record<string, unknown>[]>) {
+  function fakeClient(rows: Record<string, unknown>[], lists: Record<number, Record<string, unknown>[]>, subVenue: Record<number, unknown> = {}) {
     const calls: string[] = [];
     return {
       calls,
@@ -151,6 +176,7 @@ describe('the pull', () => {
         this.requests += 1;
         calls.push(`${body === undefined ? 'GET' : 'POST'} ${path}`);
         if (path === 'api/tours/GeneralSearchGroups') return { lstGeneralGroupsSearch: rows, TotalRows: rows.length };
+        if (path.startsWith('api/tours/getTourSubVenue/')) return { TourPlan: subVenue[Number(path.split('/').pop())] ?? null };
         const id = Number(path.split('/').pop());
         return { Applicants: lists[id] ?? [] };
       },
@@ -184,11 +210,29 @@ describe('the pull', () => {
     expect(result.groups).toHaveLength(1);
     expect(result.groups[0]).toMatchObject({ tourNo: '9001', pax: 2, paxNkerpHoused: 2, leader: 'A B' });
     expect(result.meta).toMatchObject({ approvedStays: 2, nkerpHousedOnly: 1, notApproved: 1, toursRead: 2 });
-    expect(client.calls.filter((c) => c.startsWith('GET'))).toEqual(['GET api/tours/getApplicants/5001', 'GET api/tours/getApplicants/5002']);
+    expect(client.calls.filter((c) => c.startsWith('GET api/tours/getApplicants'))).toEqual(['GET api/tours/getApplicants/5001', 'GET api/tours/getApplicants/5002']);
     // Every day of the range lights, in order.
     expect(lit[0]).toBe('2026-12-01');
     expect(lit[lit.length - 1]).toBe('2026-12-11');
     expect(lit).toEqual([...lit].sort());
     expect(events).toContain('tours');
+  });
+
+  it('includes a tour awaiting re-approval, with its latest dates', async () => {
+    const rows = [tourRow({ TourId: 6001, ReferenceNo: 'NKERP/TOUR/2026/2217', Status: 'Pending', StartDate: '2026-11-26T18:00:00', EndDate: '2026-12-06T01:00:00', lstSubVenuePlan: [] })];
+    const subVenue = {
+      6001: {
+        IsReApproval: true,
+        TourSubvenuePlan: [
+          plan(61, 'KARBALA', '2026-11-26', '2026-11-30T23:59:59.997', { IsActive: false, CreatedOn: '2026-11-12T07:06:10' }),
+          plan(62, 'NAJAF', '2026-12-01', '2026-12-06T00:00:00', { IsActive: false, CreatedOn: '2026-11-12T07:06:10' }),
+        ],
+      },
+    };
+    const lists = { 6001: [person({ AccomodationOptionId: 2 }), person({ AccomodationOptionId: 3 }), person({ AccomodationOptionId: 3, IsInfant: true })] };
+    const result = await runSync({ client: fakeClient(rows, lists, subVenue), from: '2026-12-01', office: OFFICE });
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0]).toMatchObject({ tourNo: '2217', pax: 1, infants: 1, checkIn: '2026-12-01', checkOut: '2026-12-06', secondLeg: true });
+    expect(result.meta).toMatchObject({ reapproval: 1, notApproved: 0 });
   });
 });

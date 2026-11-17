@@ -36,8 +36,12 @@ Build): every push to `main` builds with `npm run build` and deploys with
    everything approved so far). The server signs in to NKERP and reads:
    - **General search → Groups** for the office: every tour with its status,
      ports, flights and sub-venue plans. Approved tours (Approved, Current,
-     Completed) with a Najaf stay in the range go on; pending tours are
-     counted and shown as "still pending".
+     Completed) with a Najaf stay in the range go on.
+   - **Tours awaiting re-approval.** An approved tour that is updated shows as
+     Pending with no plans until NKERP re-approves it. For pending tours the
+     pull reads the tour's sub-venue plans; if it is awaiting re-approval it
+     is planned with its latest dates (marked in the Groups table). Tours that
+     were never approved are counted and shown as "still pending".
    - **Each tour's guest list**, person by person. A guest marked
      "accommodation not required" needs a bed from us, whether or not the rest
      of the tour is housed by NKERP. Cancelled, inactive and dummy guests are
@@ -48,7 +52,9 @@ Build): every push to `main` builds with `npm run build` and deploys with
 3. **Room requests.** "Room requests" takes the WhatsApp messages as they are,
    one or many at once, matches each to its tour and checks it against NKERP
    (guests, dates, totals). Rooms can also be typed in the Groups table.
-   "Download Excel" exports all of it.
+   Changes show in the Groups table at once; **Refresh plan** rebuilds the plan
+   with them (a bar says how many tours changed). "Download Excel" exports the
+   plan.
 
 ### Room requests: how they are read (`shared/roomSpec.ts`)
 
@@ -97,9 +103,10 @@ Bed size first, then rooms, as the team writes them:
 ## NKERP access
 
 Read-only, on the account's scheduling role. `server/nkerp/client.mjs` can
-only call General search → Groups (POST) and a tour's guest list
-(`GET api/tours/getApplicants/{id}`); there is no save, release or email call
-in the code.
+only call General search → Groups (POST), a tour's guest list
+(`GET api/tours/getApplicants/{id}`) and a tour's sub-venue plans
+(`GET api/tours/getTourSubVenue/{id}`); there is no save, release or email
+call in the code.
 
 ## Saved on each device
 

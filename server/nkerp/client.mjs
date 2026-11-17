@@ -21,6 +21,9 @@ export const READ_POSTS = new Set([
 export const READ_GETS = [
   // A tour's guest list, one row per person, with their accommodation choice.
   /^api\/tours\/getApplicants\/\d{1,12}$/,
+  // A tour's sub-venue plans, every version. Used for tours awaiting re-approval,
+  // which General search lists with no plans.
+  /^api\/tours\/getTourSubVenue\/\d{1,12}$/,
 ];
 
 export const isAllowedRead = (path, method) =>

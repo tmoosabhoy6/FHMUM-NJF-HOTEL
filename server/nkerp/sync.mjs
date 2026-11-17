@@ -14,7 +14,7 @@
  * so the loading screen can show it live: a window lights for each day once
  * every tour arriving by that day has been counted.
  */
-import { addDays, countGuests, daysBetween, isApprovedTour, sameOffice, staysFromGroupRow, withGuests } from './normalize.mjs';
+import { addDays, countGuests, daysBetween, isApprovedTour, isLiveTour, reapprovalRow, sameOffice, staysFromGroupRow, withGuests } from './normalize.mjs';
 
 export const DEFAULT_OFFICE = 'Fayz E Husayni Trust Mumbai';
 const LOOKBACK_DAYS = 45; // a tour that started this long before the range can still be in Najaf
@@ -96,24 +96,46 @@ export async function runSync({ client, from, to: toInput = null, office = DEFAU
     onPage: (n) => step('tours', 'active', `Reading the office’s tours (${n} found)`),
   });
   const byTour = new Map();
-  let notApproved = 0;
   const horizon = to ?? addDays(from, MAX_DAYS);
+  const pending = [];
   for (const row of rows) {
-    const stays = staysFromGroupRow(row).filter(inRange);
-    if (!isApprovedTour(row)) {
-      // Pending tours have no Najaf dates yet: count them by trip dates so the plan can say they are missing.
-      const start = String(row?.StartDate ?? '').slice(0, 10);
-      const live = row?.IsActive !== false && !/DELETED|REJECTED|CANCEL/i.test(String(row?.Status));
-      if (stays.length || (live && start >= from && start <= horizon)) notApproved += 1;
+    if (isApprovedTour(row)) {
+      const stays = staysFromGroupRow(row).filter(inRange);
+      if (stays.length) byTour.set(row.TourId, stays);
       continue;
     }
-    if (stays.length) byTour.set(row.TourId, stays);
+    // Not approved (Pending, Draft…): it may be an approved tour that was updated and awaits re-approval.
+    const start = String(row?.StartDate ?? '').slice(0, 10);
+    const end = String(row?.EndDate ?? '').slice(0, 10);
+    if (isLiveTour(row) && start && start <= horizon && (!end || end >= from)) pending.push(row);
+  }
+
+  // Tours awaiting re-approval: General search shows them with no plans, so read their plans.
+  let notApproved = 0;
+  let reapproval = 0;
+  if (pending.length) {
+    step('tours', 'active', `Checking ${pending.length} pending tours for re-approval`);
+    await pool(pending, POOL, async (row) => {
+      const data = await client.read(`api/tours/getTourSubVenue/${Number(row.TourId)}`, undefined, { signal });
+      const updated = reapprovalRow(row, data?.TourPlan);
+      const stays = updated ? staysFromGroupRow(updated).filter(inRange) : [];
+      if (stays.length) {
+        byTour.set(row.TourId, stays);
+        reapproval += 1;
+      } else if (!updated) {
+        notApproved += 1;
+      }
+    });
   }
   const tours = [...byTour.entries()]
     .map(([tourId, stays]) => ({ tourId, stays, first: stays.reduce((min, s) => (s.checkIn < min ? s.checkIn : min), stays[0].checkIn) }))
     .sort((a, b) => a.first.localeCompare(b.first));
   const approvedStays = tours.reduce((sum, t) => sum + t.stays.length, 0);
-  step('tours', 'done', `${tours.length} approved tours staying in Najaf${notApproved ? `, ${notApproved} not approved yet` : ''}`);
+  step(
+    'tours',
+    'done',
+    `${tours.length} approved tours staying in Najaf${reapproval ? ` (${reapproval} awaiting re-approval)` : ''}${notApproved ? `, ${notApproved} not approved yet` : ''}`,
+  );
 
   // ---- the days the loading screen shows -----------------------------------
   const lastOut = tours.flatMap((t) => t.stays).reduce((max, s) => (s.checkOut > max ? s.checkOut : max), from);
@@ -171,6 +193,7 @@ export async function runSync({ client, from, to: toInput = null, office = DEFAU
       approvedStays,
       nkerpHousedOnly: counted.filter((s) => s.pax === 0).length,
       notApproved,
+      reapproval,
       toursRead: tours.length,
       requests: client.requests,
       seconds: Math.round((Date.now() - started) / 100) / 10,

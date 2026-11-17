@@ -132,7 +132,7 @@ export function RoomRequests({ groups, typed, onApply, onClose }: Props) {
             />
             {saved !== null ? (
               <p className="saved-note" role="status">
-                {saved} room {saved === 1 ? 'request' : 'requests'} saved. The plan has been updated.
+                {saved} room {saved === 1 ? 'request' : 'requests'} saved and shown in the Groups table. Press Refresh plan to rebuild the plan with them.
               </p>
             ) : null}
           </section>
