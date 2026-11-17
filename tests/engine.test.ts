@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildPlan, hotelNames, nightsOf, reasonLabel, staysDepartureDay, suggestRooms } from '../shared/engine';
-import { describeRooms, formatSpec, parseRoomMessages, parseRoomSpec } from '../shared/roomSpec';
+import { describeRooms, formatSpec, parseRoomSpec } from '../shared/roomSpec';
+import { hotelMessage } from '../shared/messages';
 import { DEFAULT_SETTINGS, OPENING_BALANCE, PLANNING_START, RUYA_SHEET, ruyaRooms } from '../shared/config';
 import type { Group, Settings } from '../shared/types';
 
@@ -223,91 +224,6 @@ describe('reading room requests (bed size first, as the team writes them)', () =
   });
 });
 
-const MESSAGES = `Tour id -2213
-GL -  JUZER BHAI CHHAS
-Hotel pax - 23
-
-NAJAF (05 NIGHT)
-19-11-2026 TO 24-11-2026
-
-Room Requirement:
-
- 02 beds x   06 Rooms = 12 beds
- 03 beds x   01 Rooms = 03 beds
- 04 beds x   02 Room  =  08 beds
-
-TOTAL- 23 BEDS
-Tour id -3329
-GL -  ABBAS BHAI GONDAL
-Hotel pax - 28
-
-NAJAF (04 NIGHT)
-22-11-2026 TO 26-11-2026
-
-Room Requirement:
-
- 02 beds x   05 Rooms = 10 beds
- 03 beds x   06 Rooms = 18 beds
- 
-TOTAL- 28 BEDS
-Tour id -3194
-GL -  ABDULKADIR MATHERANWALA
-Hotel pax - 13
-
-NAJAF (04 NIGHT)
-28-11-2026 TO 02-12-2026
-
-Room Requirement:
-
- 04 beds x   02 Rooms = 08 beds
- 05 beds x   01 Rooms = 05 beds
- 
-TOTAL- 13 BEDS
-Tour id -2217
-GL -  AZIZ STOVEWALA
-Hotel pax - 21
-
-NAJAF (05 NIGHT)
-01-12-2026 TO 06-12-2026
-
-Room Requirement:
-
- 02 beds x   06 Rooms = 12 beds
- 03 beds x   03 Rooms = 09 beds
- 
-TOTAL- 21 BEDS`;
-
-describe('reading pasted room-request messages', () => {
-  it('reads every message in one paste: tour, leader, pax, dates and rooms', () => {
-    const read = parseRoomMessages(MESSAGES);
-    expect(read.map((m) => m.tourNo)).toEqual(['2213', '3329', '3194', '2217']);
-    expect(read[0]).toMatchObject({
-      leader: 'JUZER BHAI CHHAS',
-      hotelPax: 23,
-      nights: 5,
-      from: '2026-11-19',
-      to: '2026-11-24',
-      spec: '2x6, 3x1, 4x2',
-      beds: 23,
-      issues: [],
-    });
-    expect(read[1]).toMatchObject({ spec: '2x5, 3x6', beds: 28, hotelPax: 28, issues: [] });
-    expect(read[2]).toMatchObject({ spec: '4x2, 5x1', beds: 13, from: '2026-11-28', to: '2026-12-02', issues: [] });
-    expect(read[3]).toMatchObject({ spec: '2x6, 3x3', beds: 21, issues: [] });
-  });
-  it('flags a message whose numbers do not add up', () => {
-    const [m] = parseRoomMessages('Tour id - 1234\nHotel pax - 20\nNAJAF (03 NIGHT)\n01-12-2026 TO 05-12-2026\nRoom Requirement:\n 02 beds x 05 Rooms = 12 beds\nTOTAL- 12 BEDS');
-    expect(m.beds).toBe(10);
-    expect(m.issues.join(' ')).toMatch(/adds up to 10 beds, not 12/);
-    expect(m.issues.join(' ')).toMatch(/message says 12/);
-    expect(m.issues.join(' ')).toMatch(/hotel pax is 20/);
-    expect(m.issues.join(' ')).toMatch(/4 nights, the message says 3/);
-  });
-  it('ignores text without a tour id', () => {
-    expect(parseRoomMessages('hello\n2x6')).toEqual([]);
-  });
-});
-
 describe('Ruya as it really is', () => {
   it('has 33 rooms and 93 beds on the sheet, 84 beds once three rooms are left out', () => {
     expect(RUYA_SHEET).toHaveLength(33);
@@ -393,5 +309,41 @@ describe('renaming the hotels', () => {
     expect(plan.placements.b.hotel).toBe('araf');
     expect(reasonLabel(plan.placements.b.reason, names)).toBe('Roya Palace is full');
     expect(hotelNames({ ruya: '  ', araf: 'X' })).toEqual({ ruya: 'Ruya', araf: 'X', c: 'Hotel C' });
+  });
+});
+
+describe('hotel messages', () => {
+  it('writes the message in the team\'s exact format', () => {
+    const g = group({ id: 'm', tourNo: '2213', leader: 'Juzer bhai Chhas', pax: 23, checkIn: '2026-11-19', checkOut: '2026-11-24' });
+    const plan = buildPlan({ groups: [g], inputs: { m: { spec: '2x6, 3x1, 4x2' } }, settings: DEFAULT_SETTINGS, from: '2026-11-19' });
+    const message = hotelMessage(g, plan.placements.m);
+    expect(message?.text).toBe(
+      [
+        'Tour id -2213',
+        'GL -  JUZER BHAI CHHAS',
+        'Hotel pax - 23',
+        '',
+        'NAJAF (05 NIGHT)',
+        '19-11-2026 TO 24-11-2026',
+        '',
+        'Room Requirement:',
+        '',
+        ' 02 beds x   06 Rooms = 12 beds',
+        ' 03 beds x   01 Rooms = 03 beds',
+        ' 04 beds x   02 Rooms = 08 beds',
+        '',
+        'TOTAL- 23 BEDS',
+      ].join('\n'),
+    );
+  });
+  it('books the departure day too when that rule applies, and says when rooms are not known', () => {
+    const g = group({ id: 'ia', tourNo: '2446', pax: 30, checkIn: '2026-12-03', checkOut: '2026-12-07', departure: { kind: 'airport', place: 'Najaf Airport', flight: 'IA 441', airline: 'IA' } });
+    const filler = group({ id: 'f', pax: 84, checkIn: '2026-12-03', checkOut: '2026-12-09' }); // fills Ruya, so 2446 goes to Araf with no rooms
+    const plan = buildPlan({ groups: [filler, g], inputs: {}, settings: DEFAULT_SETTINGS, from: '2026-12-03' });
+    const message = hotelMessage(g, plan.placements.ia)!;
+    expect(plan.placements.ia.hotel).toBe('araf');
+    expect(message.text).toContain('NAJAF (05 NIGHT)\n03-12-2026 TO 08-12-2026');
+    expect(message.rooms).toBeNull();
+    expect(message.text).toContain(' To be confirmed');
   });
 });

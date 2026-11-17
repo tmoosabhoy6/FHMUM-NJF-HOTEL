@@ -4,7 +4,7 @@ import { OPENING_BALANCE, PLANNING_START, RUYA_WITHHELD, ruyaRooms } from '../sh
 import { dayMonth, fullDate } from '../shared/dates';
 import { buildPlan, hotelNames } from '../shared/engine';
 import type { Group, GroupInput, PullMeta, Settings } from '../shared/types';
-import { RoomRequests } from './components/RoomRequests';
+import { HotelMessages } from './components/HotelMessages';
 import { SettingsDrawer, type Prefs } from './components/SettingsDrawer';
 import { Brand } from './components/ui';
 import { exportPlan } from './lib/export';
@@ -48,7 +48,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [server, setServer] = useState<ServerState>('checking');
   const [source, setSource] = useState<'nkerp' | 'sample'>('nkerp');
-  const [panel, setPanel] = useState<'settings' | 'requests' | null>(null);
+  const [panel, setPanel] = useState<'settings' | 'messages' | null>(null);
   const [exporting, setExporting] = useState(false);
   const cancel = useRef<(() => void) | null>(null);
 
@@ -131,7 +131,6 @@ export function App() {
       if (!next.spec?.trim()) delete next.spec;
       if (!next.pin) delete next.pin;
       if (!next.roomNos?.length) delete next.roomNos;
-      if (!next.message || !next.spec) delete next.message;
       const copy = { ...all };
       if (Object.keys(next).length) copy[key] = next;
       else delete copy[key];
@@ -162,8 +161,8 @@ export function App() {
                   {refreshed && !pending ? 'Plan refreshed' : 'Refresh plan'}
                   {pending ? <span className="badge">{pending}</span> : null}
                 </button>
-                <button className="btn" onClick={() => setPanel('requests')}>
-                  Room requests
+                <button className="btn" onClick={() => setPanel('messages')}>
+                  Hotel messages
                 </button>
                 <button className="btn" onClick={() => setPanel('settings')}>
                   Hotels and rooms
@@ -207,7 +206,7 @@ export function App() {
               >
                 <div className="pending-inner">
                   <span>
-                    Room requests or hotel choices changed for {pending} {pending === 1 ? 'tour' : 'tours'}. The plan below does not include them yet.
+                    Rooms or hotel choices changed for {pending} {pending === 1 ? 'tour' : 'tours'}. The plan below does not include them yet.
                   </span>
                   <button className="btn solid" onClick={refresh}>
                     Refresh plan
@@ -221,7 +220,7 @@ export function App() {
           ) : null}
 
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}>
-            <PlanView groups={groups} plan={plan} meta={dataset.meta} inputs={inputs} onInput={onInput} onOpenRequests={() => setPanel('requests')} />
+            <PlanView groups={groups} plan={plan} meta={dataset.meta} inputs={inputs} onInput={onInput} onOpenMessages={() => setPanel('messages')} />
           </motion.div>
           <span className="sr" aria-live="polite">
             {flagged ? `${flagged} groups are not in ${names.ruya}.` : `Every group is in ${names.ruya}.`}
@@ -244,8 +243,8 @@ export function App() {
               remove(KEY.inputs);
             }}
           />
-        ) : panel === 'requests' ? (
-          <RoomRequests key="requests" groups={groups} typed={typed} onApply={onInput} onClose={() => setPanel(null)} />
+        ) : panel === 'messages' && plan ? (
+          <HotelMessages key="messages" groups={groups} plan={plan} pending={pending} onRefresh={refresh} onClose={() => setPanel(null)} />
         ) : null}
       </AnimatePresence>
 

@@ -12,8 +12,7 @@
  *   2,2,2,3                        three 2-bed rooms and one 3-bed room (one number per room)
  *   2x6, 3x1 + 4x2                 mixes, joined by new lines, + , ; or "and"
  *
- * `parseRoomMessages` reads whole pasted messages (one or many) and pulls out
- * the tour, the hotel pax, the dates and the room lines.
+ * A whole message can be pasted too: only its room lines are read.
  */
 
 export interface ParsedSpec {
@@ -117,90 +116,4 @@ export function formatSpec(rooms: readonly number[]): string {
   return groupRooms(rooms)
     .map(({ beds, count }) => `${beds}x${count}`)
     .join(', ');
-}
-
-// ---- whole messages ----------------------------------------------------------
-
-export interface RoomMessage {
-  /** Short tour number, e.g. "2213". */
-  tourNo: string;
-  leader: string | null;
-  /** "Hotel pax" as written. */
-  hotelPax: number | null;
-  nights: number | null;
-  /** Najaf dates as written, YYYY-MM-DD. */
-  from: string | null;
-  to: string | null;
-  /** The room lines, in the short form ("2x6, 3x1, 4x2"). Empty when none were found. */
-  spec: string;
-  rooms: number[];
-  beds: number;
-  /** Things in the message that do not add up. */
-  issues: string[];
-}
-
-const pad = (n: string) => n.padStart(2, '0');
-const isoDate = (d: string, m: string, y: string) => `${y.length === 2 ? `20${y}` : y}-${pad(m)}-${pad(d)}`;
-
-/** Reads one or many pasted room-request messages. Text without a tour id is ignored. */
-export function parseRoomMessages(text: string): RoomMessage[] {
-  const blocks = (text ?? '').split(/(?=tour\s*id\b)/i).filter((b) => /tour\s*id\b/i.test(b));
-  const out: RoomMessage[] = [];
-  for (const block of blocks) {
-    const tour = block.match(/tour\s*id\s*[-:–#.]*\s*(?:nkerp\s*\/\s*tour\s*\/\s*\d{4}\s*\/\s*)?(\d{2,6})/i);
-    if (!tour) continue;
-    const issues: string[] = [];
-    const leader = block.match(/^\s*g\.?\s*l\.?\s*[-:–]+\s*(.+?)\s*$/im)?.[1]?.replace(/\s+/g, ' ') ?? null;
-    const paxText = block.match(/hotel\s*pax\s*[-:–]*\s*(\d+)/i)?.[1];
-    const nightsText = block.match(/\(\s*(\d+)\s*nights?\s*\)/i)?.[1];
-    const dates = block.match(/(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})\s*(?:to|-|–)\s*(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})/i);
-    const from = dates ? isoDate(dates[1], dates[2], dates[3]) : null;
-    const to = dates ? isoDate(dates[4], dates[5], dates[6]) : null;
-
-    // Room lines: between "Room Requirement" and "TOTAL" when present, else every line naming beds.
-    const lines = block.split(/\r?\n/);
-    const start = lines.findIndex((l) => /room\s*requirement/i.test(l));
-    const end = lines.findIndex((l, i) => i > start && /^\s*total\b/i.test(l));
-    const body = (start >= 0 ? lines.slice(start + 1, end > start ? end : undefined) : lines).filter((l) =>
-      /\d\s*-?\s*(beds?|rooms?)\b|\d\s*[x×]\s*\d/i.test(l),
-    );
-    for (const line of body) {
-      const subtotal = line.match(/=\s*(\d+)\s*beds?/i);
-      const parsed = parseRoomSpec(line);
-      if (subtotal && !parsed.error && parsed.beds !== Number(subtotal[1])) {
-        issues.push(`"${line.trim()}" adds up to ${parsed.beds} beds, not ${Number(subtotal[1])}.`);
-      }
-    }
-    const parsed = parseRoomSpec(body.join('\n'));
-    if (parsed.error) issues.push(parsed.error);
-    if (!body.length) issues.push('No room lines found.');
-
-    const total = block.match(/total\s*[-:–]*\s*(\d+)\s*beds?/i)?.[1];
-    if (total && !parsed.error && parsed.beds !== Number(total)) {
-      issues.push(`The rooms add up to ${parsed.beds} beds, the message says ${Number(total)}.`);
-    }
-    const hotelPax = paxText ? Number(paxText) : null;
-    if (hotelPax !== null && !parsed.error && parsed.rooms.length && parsed.beds < hotelPax) {
-      issues.push(`The rooms sleep ${parsed.beds}, the hotel pax is ${hotelPax}.`);
-    }
-    const nights = nightsText ? Number(nightsText) : null;
-    if (nights !== null && from && to) {
-      const span = Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
-      if (span !== nights) issues.push(`${from} to ${to} is ${span} nights, the message says ${nights}.`);
-    }
-
-    out.push({
-      tourNo: String(Number(tour[1])),
-      leader,
-      hotelPax,
-      nights,
-      from,
-      to,
-      spec: parsed.error ? '' : formatSpec(parsed.rooms),
-      rooms: parsed.error ? [] : parsed.rooms,
-      beds: parsed.error ? 0 : parsed.beds,
-      issues,
-    });
-  }
-  return out;
 }

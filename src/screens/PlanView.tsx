@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { Fragment, useMemo, useState, type CSSProperties } from 'react';
 import { OPENING_BALANCE, RUYA_SHEET } from '../../shared/config';
-import { dayLabel, dayMonth, daysBetween, fullDate, rangeLabel } from '../../shared/dates';
+import { clock, dayLabel, dayMonth, daysBetween, fullDate, rangeLabel } from '../../shared/dates';
 import { HOTEL_ORDER, reasonLabel } from '../../shared/engine';
 import { describeRooms, parseRoomSpec } from '../../shared/roomSpec';
 import type { DayRow, Group, GroupInput, HotelId, HotelNames, Placement, Plan, PullMeta } from '../../shared/types';
@@ -16,7 +16,7 @@ interface Props {
   meta: PullMeta;
   inputs: Record<string, GroupInput | undefined>;
   onInput: (tourNo: string, patch: GroupInput) => void;
-  onOpenRequests: () => void;
+  onOpenMessages: () => void;
 }
 
 /** Short reason shown next to a group that is not in the first hotel. */
@@ -334,7 +334,14 @@ function RoomsCell({ group, input, placement, onInput }: { group: Group; input: 
   );
 }
 
-function notesFor(group: Group, placement: Placement | undefined, input: GroupInput, names: HotelNames): { text: string; warn: boolean }[] {
+/** Under a date: "(subvenue)" for a transfer, else the flight code and its time. */
+function howText(leg: Group['arrival'], at: string | null): string {
+  if (leg.kind === 'transfer') return '(subvenue)';
+  if (leg.kind !== 'airport') return '';
+  return [leg.flight, clock(at)].filter(Boolean).join(', ');
+}
+
+function notesFor(group: Group, placement: Placement | undefined, names: HotelNames): { text: string; warn: boolean }[] {
   const notes: { text: string; warn: boolean }[] = [];
   if (placement) {
     if (placement.overbooked) notes.push({ text: `Does not fit. ${placement.detail}`, warn: true });
@@ -344,11 +351,6 @@ function notesFor(group: Group, placement: Placement | undefined, input: GroupIn
       const airport = /baghdad/i.test(group.departure.place) ? 'Baghdad' : 'Najaf';
       notes.push({ text: `Flies ${group.departure.flight ?? 'Iraqi Airways'} from ${airport}: departure day counted as a night.`, warn: false });
     }
-  }
-  const m = input.message;
-  if (m && input.spec) {
-    if (m.hotelPax !== null && m.hotelPax !== group.pax) notes.push({ text: `Room request says ${m.hotelPax} guests, NKERP has ${group.pax}.`, warn: true });
-    if (m.from && m.to && (m.from !== group.checkIn || m.to !== group.checkOut)) notes.push({ text: `Room request says ${rangeLabel(m.from, m.to)}.`, warn: true });
   }
   if (group.paxNkerpHoused > 0) notes.push({ text: `${group.paxNkerpHoused} more on this tour are housed by NKERP.`, warn: false });
   for (const note of group.notes) notes.push({ text: note, warn: false });
@@ -383,7 +385,7 @@ function GroupsTable({ list, plan, inputs, onInput, onPick }: { list: Group[]; p
             const placement = plan.placements[group.id];
             const input = inputs[group.id] ?? {};
             const hotel: HotelId | null = placement?.hotel ?? null;
-            const notes = notesFor(group, placement, input, names);
+            const notes = notesFor(group, placement, names);
             return (
               <tr key={group.id} data-flag={Boolean(placement && (placement.hotel !== 'ruya' || placement.overbooked))}>
                 <th scope="row" className="tour">
@@ -394,8 +396,14 @@ function GroupsTable({ list, plan, inputs, onInput, onPick }: { list: Group[]; p
                   {group.pax}
                   {group.infants ? <small> +{group.infants} inf</small> : null}
                 </td>
-                <td>{dayMonth(group.checkIn)}</td>
-                <td>{dayMonth(group.checkOut)}</td>
+                <td className="when">
+                  {dayMonth(group.checkIn)}
+                  <small>{howText(group.arrival, group.arrivalAt)}</small>
+                </td>
+                <td className="when">
+                  {dayMonth(group.checkOut)}
+                  <small>{howText(group.departure, group.departureAt)}</small>
+                </td>
                 <td className="n">{placement ? placement.nights.length : daysBetween(group.checkIn, group.checkOut)}</td>
                 <td className="hotel-cell" data-hotel={hotel ?? 'none'} data-overbooked={placement?.overbooked}>
                   <label className="sr" htmlFor={`pin-${group.id}`}>
@@ -447,7 +455,7 @@ function GroupsTable({ list, plan, inputs, onInput, onPick }: { list: Group[]; p
 
 // ---- the page --------------------------------------------------------------------
 
-export function PlanView({ groups, plan, meta, inputs, onInput, onOpenRequests }: Props) {
+export function PlanView({ groups, plan, meta, inputs, onInput, onOpenMessages }: Props) {
   const names = useNames();
   const byId = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
   // Groups that reached Najaf before the first night are covered by the opening balance (rooms 109, 110, 201, 202).
@@ -527,12 +535,12 @@ export function PlanView({ groups, plan, meta, inputs, onInput, onOpenRequests }
         <div className="block-head">
           <h2>Groups</h2>
           <p>
-            One row per group. {asked} of {planned.length} have their rooms.{' '}
-            <button className="linkish" onClick={onOpenRequests}>
-              Paste room requests
-            </button>{' '}
-            or type them as bed size × rooms (2x6 is six 2-bed rooms). “Choose rooms” picks exact {names.ruya} rooms by hand. Then press{' '}
-            <b>Refresh plan</b> to rebuild the plan with them.
+            One row per group. {asked} of {planned.length} have rooms typed. Type rooms as bed size × rooms (2x6 is six 2-bed rooms), or
+            “Choose rooms” to pick exact {names.ruya} rooms, then press <b>Refresh plan</b>. The messages to send the hotels are under{' '}
+            <button className="linkish" onClick={onOpenMessages}>
+              Hotel messages
+            </button>
+            .
           </p>
         </div>
         <GroupsTable list={planned} plan={plan} inputs={inputs} onInput={onInput} onPick={setPicking} />

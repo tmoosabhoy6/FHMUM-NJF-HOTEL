@@ -97,8 +97,6 @@ export interface RuyaRoom {
 export interface GroupInput {
   /** Rooms needed in Ruya, as typed or pasted. */
   spec?: string;
-  /** What the pasted room-request message said, kept to check against NKERP. */
-  message?: { hotelPax: number | null; from: string | null; to: string | null; leader: string | null };
   /** Keep this group in a chosen hotel instead of letting the planner decide. */
   pin?: HotelId | null;
   /** Exact Ruya room numbers chosen by hand. Puts the group in Ruya in these rooms. */

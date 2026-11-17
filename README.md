@@ -50,15 +50,17 @@ Build): every push to `main` builds with `npm run build` and deploys with
      left out; infants are counted apart (they share a bed).
 2. **Plan.** The page opens straight on the plan, laid out like the Excel
    file: a summary per hotel, the daily plan (click a night to see the Ruya
-   rooms floor by floor), the bookings to make, and the groups.
-3. **Room requests.** "Room requests" takes the WhatsApp messages as they are,
-   one or many at once, matches each to its tour and checks it against NKERP
-   (guests, dates, totals). Rooms can also be typed in the Groups table.
-   Changes show in the Groups table at once; **Refresh plan** rebuilds the plan
-   with them (a bar says how many tours changed). "Download Excel" exports the
-   plan.
+   rooms floor by floor), the bookings to make, and the groups. Under each
+   arrival and departure date: "(subvenue)" for a Karbala transfer, else the
+   flight code and time.
+3. **Rooms.** Type a group's rooms in the Groups table, or "Choose rooms" to
+   pick exact Ruya rooms. Changes show in the Groups table at once; **Refresh
+   plan** rebuilds the plan with them (a bar says how many tours changed).
+4. **Hotel messages.** One message per group in the team's format (`shared/messages.ts`),
+   by check-in date, filtered by hotel, with a Copy button on each and "Copy
+   all" per date. "Download Excel" exports the plan.
 
-### Room requests: how they are read (`shared/roomSpec.ts`)
+### Typed rooms: how they are read (`shared/roomSpec.ts`)
 
 Bed size first, then rooms, as the team writes them:
 
@@ -114,5 +116,5 @@ call in the code.
 
 ## Saved on each device
 
-Room requests, hotel choices and which Ruya rooms are left out are saved in the
+Typed rooms, hotel choices, hotel names and which Ruya rooms are left out are saved in the
 browser, per device, keyed by tour number so they survive a new pull.
