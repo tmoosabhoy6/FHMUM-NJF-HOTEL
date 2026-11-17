@@ -1119,7 +1119,7 @@ button {
 
 .nd-room {
   min-width: 0;
-  height: 44px;
+  height: 56px;
   display: grid;
   place-content: center;
   text-align: center;
@@ -1146,7 +1146,14 @@ button {
 
 .nd-room[data-taken='true'] span {
   color: var(--tint-ink);
+}
+
+.nd-room .nd-who-in {
   font-weight: 700;
+}
+
+.nd-room[data-taken='true'] .nd-beds {
+  opacity: 0.75;
 }
 
 /* A room left out of the plan: crossed out. */
