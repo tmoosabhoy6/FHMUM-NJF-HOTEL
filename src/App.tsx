@@ -1,15 +1,16 @@
-import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DEFAULT_SETTINGS, OPENING_BALANCE, PLANNING_START } from '../shared/config';
+import { OPENING_BALANCE, PLANNING_START, RUYA_WITHHELD, ruyaRooms } from '../shared/config';
 import { dayMonth, fullDate } from '../shared/dates';
 import { buildPlan } from '../shared/engine';
 import type { Group, GroupInput, PullMeta, Settings } from '../shared/types';
-import { SettingsDrawer } from './components/SettingsDrawer';
+import { RoomRequests } from './components/RoomRequests';
+import { SettingsDrawer, type Prefs } from './components/SettingsDrawer';
 import { Brand } from './components/ui';
 import { exportPlan } from './lib/export';
+import { inputKey } from './lib/inputs';
 import { load, remove, save } from './lib/storage';
 import { checkServer, emptyProgress, startPull, type PullProgress, type ServerState } from './lib/sync';
-import { Groups } from './screens/Groups';
 import { Night } from './screens/Night';
 import { PlanView } from './screens/PlanView';
 
@@ -18,9 +19,10 @@ interface Dataset {
   meta: PullMeta;
 }
 
-const KEY = { data: 'njf.dataset.v1', inputs: 'njf.inputs.v1', settings: 'njf.settings.v1', range: 'njf.range.v1' };
-/** Typed rooms are kept per tour, so they survive a new pull and a reissued plan. */
-const inputKey = (group: Group) => String(group.tourId);
+// v2: guests are counted person by person, and room requests are written bed size first.
+const KEY = { data: 'njf.dataset.v2', inputs: 'njf.inputs.v2', prefs: 'njf.prefs.v2', range: 'njf.range.v2' };
+
+const DEFAULT_PREFS: Prefs = { arafCapacity: 100, departureDayRule: true, withheld: RUYA_WITHHELD };
 
 function ago(iso: string): string {
   const minutes = Math.round((Date.now() - Date.parse(iso)) / 60_000);
@@ -34,26 +36,36 @@ function ago(iso: string): string {
 export function App() {
   const [dataset, setDataset] = useState<Dataset | null>(() => load<Dataset | null>(KEY.data, null));
   const [typed, setTyped] = useState<Record<string, GroupInput>>(() => load(KEY.inputs, {}));
-  const [settings, setSettings] = useState<Settings>(() => ({ ...DEFAULT_SETTINGS, ...load<Partial<Settings>>(KEY.settings, {}) }));
+  const [prefs, setPrefs] = useState<Prefs>(() => ({ ...DEFAULT_PREFS, ...load<Partial<Prefs>>(KEY.prefs, {}) }));
   const [range, setRange] = useState(() => load(KEY.range, { from: PLANNING_START, to: '' }));
   const [screen, setScreen] = useState<'start' | 'pulling' | 'failed' | 'app'>(() => (load<Dataset | null>(KEY.data, null) ? 'app' : 'start'));
-  const [view, setView] = useState<'groups' | 'plan'>('groups');
   const [progress, setProgress] = useState<PullProgress>(emptyProgress);
   const [error, setError] = useState<string | null>(null);
   const [server, setServer] = useState<ServerState>('checking');
   const [source, setSource] = useState<'nkerp' | 'sample'>('nkerp');
-  const [drawer, setDrawer] = useState(false);
-  const [date, setDate] = useState<string | null>(null);
+  const [panel, setPanel] = useState<'settings' | 'requests' | null>(null);
   const [exporting, setExporting] = useState(false);
   const cancel = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     checkServer().then(setServer);
+    // Data saved by the first version is in an older shape: drop it.
+    for (const old of ['njf.dataset.v1', 'njf.inputs.v1', 'njf.settings.v1', 'njf.range.v1']) remove(old);
   }, []);
   useEffect(() => save(KEY.inputs, typed), [typed]);
-  useEffect(() => save(KEY.settings, settings), [settings]);
+  useEffect(() => save(KEY.prefs, prefs), [prefs]);
   useEffect(() => save(KEY.range, range), [range]);
   useEffect(() => () => cancel.current?.(), []);
+
+  const settings = useMemo<Settings>(() => {
+    const rooms = ruyaRooms(prefs.withheld);
+    return {
+      rooms,
+      ruyaCapacity: rooms.reduce((sum, r) => sum + r.beds * r.count, 0),
+      arafCapacity: prefs.arafCapacity,
+      departureDayRule: prefs.departureDayRule,
+    };
+  }, [prefs]);
 
   const pull = useCallback(
     (source: 'nkerp' | 'sample') => {
@@ -71,8 +83,6 @@ export function App() {
             // Let the last windows light before the night lifts.
             window.setTimeout(() => {
               setDataset(result);
-              setDate(null);
-              setView('groups');
               setScreen('app');
             }, 900);
           },
@@ -86,34 +96,29 @@ export function App() {
     [range],
   );
 
-  const groups = dataset?.groups ?? [];
+  const groups = useMemo(() => dataset?.groups ?? [], [dataset]);
   const inputs = useMemo(() => Object.fromEntries(groups.map((g) => [g.id, typed[inputKey(g)]])), [groups, typed]);
   const plan = useMemo(
     () =>
       dataset
-        ? buildPlan({ groups, inputs, settings, holds: OPENING_BALANCE, from: dataset.meta.from, to: dataset.meta.to })
+        ? buildPlan({ groups, inputs, settings, holds: OPENING_BALANCE, from: dataset.meta.from, to: dataset.meta.to, start: PLANNING_START })
         : null,
     [dataset, groups, inputs, settings],
   );
 
-  const onInput = useCallback((group: Group, patch: GroupInput) => {
+  const onInput = useCallback((tourNo: string, patch: GroupInput) => {
+    const key = inputKey({ tourNo });
     setTyped((all) => {
-      const next = { ...all[inputKey(group)], ...patch };
+      const next: GroupInput = { ...all[key], ...patch };
       if (!next.spec?.trim()) delete next.spec;
       if (!next.pin) delete next.pin;
+      if (!next.message || !next.spec) delete next.message;
       const copy = { ...all };
-      if (Object.keys(next).length) copy[inputKey(group)] = next;
-      else delete copy[inputKey(group)];
+      if (Object.keys(next).length) copy[key] = next;
+      else delete copy[key];
       return copy;
     });
   }, []);
-
-  // Open the plan on the first night that needs a booking elsewhere.
-  const selected = useMemo(() => {
-    if (!plan) return null;
-    if (date && plan.days.some((d) => d.date === date)) return date;
-    return plan.bookings[0]?.from ?? plan.days.find((d) => d.total > 0)?.date ?? plan.days[0]?.date ?? null;
-  }, [plan, date]);
 
   const night = screen !== 'app';
   const flagged = plan?.totals.flagged ?? 0;
@@ -125,30 +130,20 @@ export function App() {
           <header className="app-top">
             <div className="app-top-inner">
               <Brand />
-              <LayoutGroup>
-                <nav className="tabs" role="tablist" aria-label="Views">
-                  {(
-                    [
-                      ['groups', 'Groups', plan.totals.groups],
-                      ['plan', 'Plan', null],
-                    ] as const
-                  ).map(([id, label, count]) => (
-                    <button key={id} role="tab" className="tab" aria-selected={view === id} onClick={() => setView(id)}>
-                      {label}
-                      {count !== null ? <span className="tab-count">{count}</span> : null}
-                      {view === id ? <motion.span layoutId="tab-line" className="tab-line" transition={{ type: 'spring', stiffness: 520, damping: 40 }} /> : null}
-                    </button>
-                  ))}
-                </nav>
-              </LayoutGroup>
+              <div className="pulled">
+                <b>
+                  From {dayMonth(dataset.meta.from)}
+                  {dataset.meta.to ? ` to ${dayMonth(dataset.meta.to)}` : ''}
+                </b>
+                Pulled {ago(dataset.meta.fetchedAt)}
+              </div>
               <div className="top-actions">
-                <div className="pulled">
-                  <b>
-                    From {dayMonth(dataset.meta.from)}
-                    {dataset.meta.to ? ` to ${dayMonth(dataset.meta.to)}` : ''}
-                  </b>
-                  Pulled {ago(dataset.meta.fetchedAt)}
-                </div>
+                <button className="btn" onClick={() => setPanel('requests')}>
+                  Room requests
+                </button>
+                <button className="btn" onClick={() => setPanel('settings')}>
+                  Hotels and rooms
+                </button>
                 <button
                   className="btn"
                   onClick={() => {
@@ -158,9 +153,6 @@ export function App() {
                   }}
                 >
                   Pull again
-                </button>
-                <button className="btn" onClick={() => setDrawer(true)}>
-                  Hotels and rooms
                 </button>
                 <button
                   className="btn solid"
@@ -183,36 +175,9 @@ export function App() {
             <div className="banner">Sample groups, not NKERP. Pull again to load the real tours.</div>
           ) : null}
 
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={view}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
-            >
-              {view === 'groups' ? (
-                <Groups
-                  groups={groups}
-                  plan={plan}
-                  from={dataset.meta.from}
-                  inputs={inputs}
-                  onInput={onInput}
-                  onOpenPlan={() => setView('plan')}
-                  onOpenSettings={() => setDrawer(true)}
-                />
-              ) : (
-                <PlanView
-                  groups={groups}
-                  plan={plan}
-                  date={selected ?? dataset.meta.from}
-                  onDate={setDate}
-                  onOpenSettings={() => setDrawer(true)}
-                  onOpenGroups={() => setView('groups')}
-                />
-              )}
-            </motion.div>
-          </AnimatePresence>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}>
+            <PlanView groups={groups} plan={plan} meta={dataset.meta} inputs={inputs} onInput={onInput} onOpenRequests={() => setPanel('requests')} />
+          </motion.div>
           <span className="sr" aria-live="polite">
             {flagged ? `${flagged} groups are not in Ruya.` : 'Every group is in Ruya.'}
           </span>
@@ -220,18 +185,21 @@ export function App() {
       ) : null}
 
       <AnimatePresence>
-        {drawer ? (
+        {panel === 'settings' ? (
           <SettingsDrawer
-            key="drawer"
-            settings={settings}
-            onChange={setSettings}
-            onClose={() => setDrawer(false)}
+            key="settings"
+            prefs={prefs}
+            beds={settings.ruyaCapacity}
+            onChange={setPrefs}
+            onClose={() => setPanel(null)}
             typedCount={Object.keys(typed).length}
             onClearInputs={() => {
               setTyped({});
               remove(KEY.inputs);
             }}
           />
+        ) : panel === 'requests' ? (
+          <RoomRequests key="requests" groups={groups} typed={typed} onApply={onInput} onClose={() => setPanel(null)} />
         ) : null}
       </AnimatePresence>
 

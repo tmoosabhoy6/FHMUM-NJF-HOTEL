@@ -15,14 +15,14 @@ export async function checkServer(): Promise<ServerState> {
   }
 }
 
-export type StepId = 'signin' | 'tours' | 'transport' | 'match';
+export type StepId = 'signin' | 'tours' | 'guests' | 'match';
 export type StepStatus = 'waiting' | 'active' | 'done';
 
 export interface PullProgress {
   steps: Record<StepId, { status: StepStatus; detail: string }>;
-  /** Dates the transport dashboards will be read for. */
+  /** Dates the plan will cover. */
   dates: string[];
-  /** Dates read so far, with the guests moving that day. */
+  /** Dates complete so far, with the guests arriving and leaving that day. */
   read: Record<string, { arriving: number; leaving: number }>;
   groups: number;
   guests: number;
@@ -33,19 +33,19 @@ export interface PullResult {
   meta: PullMeta;
 }
 
-export const STEP_ORDER: StepId[] = ['signin', 'tours', 'transport', 'match'];
+export const STEP_ORDER: StepId[] = ['signin', 'tours', 'guests', 'match'];
 export const STEP_TITLE: Record<StepId, string> = {
   signin: 'Sign in to NKERP',
   tours: 'Approved Najaf tours',
-  transport: 'Arrivals and departures',
-  match: 'Match groups with flights',
+  guests: 'Guests who need a hotel',
+  match: 'Build the stays',
 };
 
 export const emptyProgress = (): PullProgress => ({
   steps: {
     signin: { status: 'waiting', detail: '' },
     tours: { status: 'waiting', detail: '' },
-    transport: { status: 'waiting', detail: '' },
+    guests: { status: 'waiting', detail: '' },
     match: { status: 'waiting', detail: '' },
   },
   dates: [],

@@ -36,7 +36,18 @@ export async function exportPlan(plan: Plan, groups: Group[], meta: PullMeta) {
     { header: 'Leaving (tours)', key: 'out', width: 26 },
     { header: 'In Araf (tours)', key: 'arafTours', width: 26 },
     { header: 'In Hotel C (tours)', key: 'cTours', width: 26 },
+    { header: 'Why Araf or Hotel C', key: 'why', width: 48 },
   ];
+  const why = (ids: string[]) => {
+    const reasons = new Map<string, string[]>();
+    for (const id of ids) {
+      const p = plan.placements[id];
+      if (!p) continue;
+      const label = p.overbooked ? 'Does not fit' : REASON_LABEL[p.reason];
+      reasons.set(label, [...(reasons.get(label) ?? []), byId.get(id)?.tourNo ?? id]);
+    }
+    return [...reasons].map(([label, list]) => `${label}: ${list.join(', ')}`).join('; ');
+  };
   for (const day of plan.days) {
     const row = daily.addRow({
       date: dayLabel(day.date),
@@ -49,6 +60,7 @@ export async function exportPlan(plan: Plan, groups: Group[], meta: PullMeta) {
       out: tours(day.departures),
       arafTours: tours(day.hotels.araf.groups),
       cTours: tours(day.hotels.c.groups),
+      why: why([...day.hotels.araf.groups, ...day.hotels.c.groups]),
     });
     for (const hotel of HOTEL_ORDER) {
       if (day.hotels[hotel].pax > 0) {

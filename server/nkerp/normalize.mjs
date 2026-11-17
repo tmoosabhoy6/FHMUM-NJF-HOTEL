@@ -1,15 +1,30 @@
 /**
  * Turns raw NKERP rows into plain facts about one Najaf stay.
  * No allocation policy lives here: the browser decides who sleeps where.
+ *
+ * Two sources:
+ *   - General search → Groups: one row per tour, with its status, ports,
+ *     flights and sub-venue plans (Najaf, Karbala, in trip order).
+ *   - The tour's guest list: one row per person, with their accommodation
+ *     choice. Only guests marked "accommodation not required" need a bed from
+ *     us, and a tour that NKERP houses can still have some of them.
  */
 
 export const NAJAF = 'NAJAF';
 export const KARBALA = 'KARBALA';
+export const SUBVENUE_NAJAF = 3;
+
+/** Tour statuses that mean NKERP has approved the tour. */
+export const APPROVED_STATUSES = new Set(['APPROVED', 'CURRENT', 'COMPLETED']);
+
+/** NKERP AccomodationOptionId: 2 = accommodation required (NKERP houses them), 3 = not required (they house themselves). */
+export const ACCOMMODATION_REQUIRED = 2;
+export const ACCOMMODATION_NOT_REQUIRED = 3;
 
 const clean = (value) => String(value ?? '').replace(/\s+/g, ' ').trim();
 const upper = (value) => clean(value).toUpperCase();
 
-/** "2026-11-07T11:00:00" → "2026-11-07". NKERP list times are Najaf local. */
+/** "2026-11-07T11:00:00" → "2026-11-07". NKERP local (Najaf) times. */
 export const dateOf = (stamp) => (typeof stamp === 'string' && stamp.length >= 10 ? stamp.slice(0, 10) : null);
 
 export const sameOffice = (a, b) => upper(a).replace(/[^A-Z0-9]/g, '') === upper(b).replace(/[^A-Z0-9]/g, '');
@@ -24,6 +39,18 @@ export function daysBetween(a, b) {
   return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000);
 }
 
+/**
+ * The date a sub-venue plan ends on. A plan followed by another sub-venue
+ * ends at 23:59 the day before the move ("2026-11-23T23:59:59.997" when the
+ * group moves on 24 Nov), so that rolls over to the next date; a plan that
+ * ends the trip ends at midnight on the departure date.
+ */
+export function endDateOf(stamp) {
+  const date = dateOf(stamp);
+  if (!date) return null;
+  return /T23:59/.test(stamp) ? addDays(date, 1) : date;
+}
+
 /** Airline designator from a flight code: "IA 441" → "IA", "FZ 221 EVE" → "FZ". */
 export function airlineOf(flight) {
   const code = upper(flight);
@@ -36,273 +63,116 @@ export function airlineOf(flight) {
 export const isIraqiAirways = (flight) => airlineOf(flight) === 'IA' || airlineOf(flight) === 'IAW';
 export const isNajafAirport = (port) => /NAJAF/.test(upper(port)) && /AIR/.test(upper(port));
 
-/**
- * Guests the group houses itself. NKERP stores 0/0 when the whole tour was
- * approved without accommodation, in which case the full pax count applies.
- */
-export function selfHousedPax({ pax, required, notRequired, approvedWithAccommodation }) {
-  const total = Number(pax) || 0;
-  const not = Number(notRequired) || 0;
-  const req = Number(required) || 0;
-  if (not > 0) return not;
-  if (req === 0 && approvedWithAccommodation === false) return total;
-  return 0;
-}
+export const isApprovedTour = (row) => row?.IsActive !== false && APPROVED_STATUSES.has(upper(row?.Status));
 
-function pickItinerary(itineraries, arrivalAt, departureAt) {
+const activePlans = (row) =>
+  (row?.lstSubVenuePlan ?? [])
+    .filter((p) => p && p.IsActive !== false && !p.IsRemoved && p.StartDateTimeZone && p.EndDateTimeZone)
+    .sort((a, b) => String(a.StartDateTimeZone).localeCompare(String(b.StartDateTimeZone)));
+
+function pickItinerary(itineraries, from, to) {
   const list = (itineraries ?? []).filter((it) => it && it.IsActive !== false);
   if (list.length <= 1) return list[0] ?? null;
   const inside = list.filter(
-    (it) =>
-      (!it.ArrivalDateTimeZone || it.ArrivalDateTimeZone <= departureAt) &&
-      (!it.DepartureDateTimeZone || it.DepartureDateTimeZone >= arrivalAt),
+    (it) => (!it.ArrivalDateTimeZone || dateOf(it.ArrivalDateTimeZone) <= to) && (!it.DepartureDateTimeZone || dateOf(it.DepartureDateTimeZone) >= from),
   );
   return (inside.length ? inside : list).sort((a, b) => (b.Id ?? 0) - (a.Id ?? 0))[0];
 }
 
-function nearestLeg(legs, predicate, date) {
-  let best = null;
-  for (const leg of legs) {
-    if (!predicate(leg)) continue;
-    const gap = Math.abs(daysBetween(date, dateOf(leg.Date) ?? date));
-    if (!best || gap < best.gap) best = { leg, gap };
-  }
-  return best && best.gap <= 1 ? best.leg : null;
-}
+/**
+ * One tour row from General search → Groups → one stay per Najaf plan.
+ * Guest counts are filled in later from the guest list (`withGuests`).
+ */
+export function staysFromGroupRow(row) {
+  const ref = clean(row?.ReferenceNo);
+  if (!ref || !row?.TourId) return [];
+  const plans = activePlans(row);
+  const stays = [];
+  plans.forEach((plan, i) => {
+    if (Number(plan.SubvenueId) !== SUBVENUE_NAJAF && upper(plan.SubvenueName) !== NAJAF) return;
+    const checkIn = dateOf(plan.StartDateTimeZone);
+    const checkOut = endDateOf(plan.EndDateTimeZone);
+    if (!checkIn || !checkOut || checkOut < checkIn) return;
+    const previous = plans[i - 1] ?? null;
+    const next = plans[i + 1] ?? null;
+    const itinerary = pickItinerary(row.lstTransportItinerary, checkIn, checkOut);
 
-/** One row of the Najaf ziyarat lists → one stay. Returns null when it is not usable. */
-export function stayFromCensusRow(row) {
-  const tour = row?.Tour ?? {};
-  const arrivalAt = row.ArrivalDate ?? null;
-  const departureAt = row.DepartureDate ?? null;
-  const checkIn = dateOf(arrivalAt);
-  const checkOut = dateOf(departureAt);
-  if (!tour.ReferenceNo || !checkIn || !checkOut || checkOut < checkIn) return null;
+    const arrival = previous
+      ? { kind: 'transfer', place: upper(previous.SubvenueName) || KARBALA, flight: null }
+      : { kind: 'airport', place: clean(row.EntryPort), flight: clean(itinerary?.ArrivalTransportCode) || null };
+    const departure = next
+      ? { kind: 'transfer', place: upper(next.SubvenueName) || KARBALA, flight: null, airline: null }
+      : { kind: 'airport', place: clean(row.ExitPort), flight: clean(itinerary?.DepartureTransportCode) || null, airline: null };
+    departure.airline = airlineOf(departure.flight);
 
-  const itinerary = pickItinerary(tour.TransportItinerary, arrivalAt, departureAt);
-  const legs = (tour.TourIternerayBreakUp ?? []).filter((leg) => leg && leg.IsActive !== false);
-  const legIn = nearestLeg(legs, (leg) => upper(leg.To) === NAJAF, checkIn);
-  const legOut = nearestLeg(legs, (leg) => upper(leg.From) === NAJAF, checkOut);
-
-  let arrival;
-  if (legIn) {
-    arrival =
-      upper(legIn.TravelType) === 'S'
-        ? { kind: 'transfer', place: clean(legIn.From), flight: null }
-        : { kind: 'airport', place: clean(legIn.From), flight: clean(itinerary?.ArrivalTransportCode) || null };
-  } else if (itinerary && dateOf(itinerary.ArrivalDateTimeZone) === checkIn) {
-    arrival = { kind: 'airport', place: clean(tour.EntryPortName), flight: clean(itinerary.ArrivalTransportCode) || null };
-  } else if (itinerary?.ArrivalDateTimeZone) {
-    arrival = { kind: 'transfer', place: KARBALA, flight: null };
-  } else {
-    arrival = { kind: 'unknown', place: '', flight: null };
-  }
-
-  let departure;
-  if (legOut) {
-    departure =
-      upper(legOut.TravelType) === 'S'
-        ? { kind: 'transfer', place: clean(legOut.To), flight: null }
-        : { kind: 'airport', place: clean(legOut.To), flight: clean(itinerary?.DepartureTransportCode) || null };
-  } else if (itinerary && dateOf(itinerary.DepartureDateTimeZone) === checkOut) {
-    departure = { kind: 'airport', place: clean(tour.ExitPortName), flight: clean(itinerary.DepartureTransportCode) || null };
-  } else if (itinerary?.DepartureDateTimeZone) {
-    departure = { kind: 'transfer', place: KARBALA, flight: null };
-  } else {
-    departure = { kind: 'unknown', place: '', flight: null };
-  }
-  departure.airline = airlineOf(departure.flight);
-
-  const planId = row.TourSubVenuePlanId ?? row.Id;
-  const paxTotal = Number(tour.PaxCount) || 0;
-  return {
-    id: `${row.TourId}:${planId}`,
-    tourId: row.TourId,
-    planId,
-    ref: clean(tour.ReferenceNo),
-    tourNo: clean(tour.ReferenceNo).split('/').pop(),
-    office: clean(tour.OfficeName),
-    leader: clean(row.GroupLead ?? tour.GroupLead ?? tour.TOName),
-    pax: selfHousedPax({
-      pax: paxTotal,
-      required: tour.PaxRequiredAcc,
-      notRequired: tour.PaxNotRequiredAcc,
-      approvedWithAccommodation: tour.IsApprovedWithAccommodation,
-    }),
-    paxTotal,
-    paxNkerpHoused: Number(tour.PaxRequiredAcc) || 0,
-    checkIn,
-    checkOut,
-    arrivalAt,
-    departureAt,
-    arrival,
-    departure,
-    secondLeg: arrival.kind === 'transfer' && upper(arrival.place) === KARBALA,
-    seenIn: { tourList: true, dashboard: false },
-    notes: [],
-  };
-}
-
-/** A reissued plan for the same tour and overlapping dates: the newest plan wins. */
-export function collapseReissues(stays) {
-  const byTour = new Map();
-  for (const stay of stays) {
-    const list = byTour.get(stay.tourId) ?? [];
-    list.push(stay);
-    byTour.set(stay.tourId, list);
-  }
-  const kept = [];
-  for (const list of byTour.values()) {
-    list.sort((a, b) => b.planId - a.planId);
-    const winners = [];
-    for (const stay of list) {
-      const overlaps = winners.some((w) => stay.checkIn <= w.checkOut && w.checkIn <= stay.checkOut);
-      if (!overlaps) winners.push(stay);
-    }
-    kept.push(...winners);
-  }
-  return kept;
-}
-
-/** Dashboard rows share one shape; this picks the fields the planner uses. */
-export function dashboardFact(kind, row) {
-  const local =
-    kind === 'arrival' || kind === 'stay'
-      ? row.ArrivalTimeWithTimeZone
-      : kind === 'departure'
-        ? row.DepartureTimeWithTimeZone
-        : row.ArrivalDepartureTime;
-  return {
-    kind,
-    tourId: row.TourId,
-    ref: clean(row.TourReferenceNo),
-    tourNo: clean(row.TourReferenceNo).split('/').pop(),
-    office: clean(row.OfficeName),
-    leader: clean(row.GroupLeaderName),
-    paxTotal: Number(row.NoOfPax) || 0,
-    pax: selfHousedPax({
-      pax: row.NoOfPax,
-      required: row.PaxRequiredAcc,
-      notRequired: row.PaxNotRequiredAcc,
-      approvedWithAccommodation: row.Accommodation,
-    }),
-    at: local ?? null,
-    date: dateOf(local),
-    port: clean(kind === 'arrival' || kind === 'stay' ? row.ArrivalPort : row.DeparturePort) || null,
-    flight: clean(kind === 'departure' ? row.FlightCode : kind === 'arrival' || kind === 'stay' ? row.FlightCode : '') || null,
-    departureFlight: clean(row.DepartureFlightCode) || null,
-    from: clean(row.SubVenueFrom) || null,
-    to: clean(row.SubVenueTo) || null,
-  };
+    const landed = itinerary?.ArrivalDateTimeZone && dateOf(itinerary.ArrivalDateTimeZone) === checkIn ? itinerary.ArrivalDateTimeZone : null;
+    const leaves = itinerary?.DepartureDateTimeZone && dateOf(itinerary.DepartureDateTimeZone) === checkOut ? itinerary.DepartureDateTimeZone : null;
+    stays.push({
+      id: `${row.TourId}:${plan.Id ?? i}`,
+      tourId: row.TourId,
+      planId: plan.Id ?? 0,
+      ref,
+      tourNo: ref.split('/').pop(),
+      office: clean(row.OfficeName),
+      leader: '',
+      status: clean(row.Status),
+      pax: 0,
+      infants: 0,
+      paxTotal: Number(row.PaxCount) || 0,
+      paxNkerpHoused: 0,
+      checkIn,
+      checkOut,
+      arrivalAt: arrival.kind === 'airport' ? landed : null,
+      departureAt: departure.kind === 'airport' ? leaves : null,
+      arrival,
+      departure,
+      secondLeg: arrival.kind === 'transfer' && arrival.place === KARBALA,
+      notes: [],
+    });
+  });
+  return stays;
 }
 
 /**
- * Checks each stay against what the transport dashboards showed and fills in
- * anything the tour list did not carry. Differences become plain-language
- * notes so a person can look at them; the tour list stays the reference.
+ * Counts a tour's guests, person by person. Cancelled, inactive and dummy
+ * guests are left out. `notRequired` is the beds we must find: guests marked
+ * "accommodation not required", not counting infants, who share a bed.
  */
-export function reconcile(stays, facts, { from }) {
-  const byTour = new Map();
-  for (const stay of stays) {
-    const list = byTour.get(stay.tourId) ?? [];
-    list.push(stay);
-    byTour.set(stay.tourId, list);
-  }
-  const closest = (tourId, date, field) => {
-    const list = byTour.get(tourId);
-    if (!list?.length) return null;
-    return [...list].sort(
-      (a, b) => Math.abs(daysBetween(a[field], date ?? a[field])) - Math.abs(daysBetween(b[field], date ?? b[field])),
-    )[0];
-  };
-  const orphans = new Map();
-
-  for (const fact of facts) {
-    if (fact.pax <= 0) continue;
-    const field = fact.kind === 'departure' || fact.kind === 'transfer-out' ? 'checkOut' : 'checkIn';
-    const stay =
-      fact.kind === 'stay'
-        ? (byTour.get(fact.tourId) ?? []).find((s) => s.checkIn <= fact.queried && fact.queried <= s.checkOut)
-        : closest(fact.tourId, fact.date, field);
-    if (!stay) {
-      const entry = orphans.get(fact.tourId) ?? { facts: [] };
-      entry.facts.push(fact);
-      orphans.set(fact.tourId, entry);
+export function countGuests(applicants) {
+  const counts = { total: 0, required: 0, notRequired: 0, infants: 0, unknown: 0, cancelled: 0, leader: '' };
+  for (const a of applicants ?? []) {
+    if (!a) continue;
+    if (a.IsCancellation || a.IsActive === false || a.IsApplicantActive === false || a.IsDummy) {
+      counts.cancelled += 1;
       continue;
     }
-    stay.seenIn.dashboard = true;
-    if (fact.pax !== stay.pax && !stay.notes.some((n) => n.startsWith('Guest count'))) {
-      stay.notes.push(`Guest count differs: tour list says ${stay.pax}, transport dashboard says ${fact.pax}.`);
-    }
-    if (fact.kind === 'departure') {
-      if (fact.date && fact.date !== stay.checkOut) {
-        stay.notes.push(`Departure dashboard shows this group leaving on ${fact.date}, the tour list says ${stay.checkOut}.`);
-      }
-      if (stay.departure.kind !== 'airport') {
-        stay.departure = { kind: 'airport', place: fact.port ?? '', flight: fact.flight, airline: airlineOf(fact.flight) };
-      } else {
-        if (fact.flight && stay.departure.flight && upper(fact.flight) !== upper(stay.departure.flight)) {
-          stay.notes.push(`Departure flight differs: tour list ${stay.departure.flight}, dashboard ${fact.flight}.`);
-        }
-        stay.departure.flight = fact.flight ?? stay.departure.flight;
-        stay.departure.place = fact.port ?? stay.departure.place;
-        stay.departure.airline = airlineOf(stay.departure.flight);
-      }
-    } else if (fact.kind === 'transfer-in') {
-      if (stay.arrival.kind !== 'transfer') {
-        stay.arrival = { kind: 'transfer', place: fact.from ?? KARBALA, flight: null };
-        stay.secondLeg = upper(stay.arrival.place) === KARBALA;
-      }
-    } else if (fact.kind === 'arrival') {
-      if (stay.arrival.kind === 'unknown') stay.arrival = { kind: 'airport', place: fact.port ?? '', flight: fact.flight };
-    } else if (fact.kind === 'transfer-out') {
-      if (stay.departure.kind === 'unknown') {
-        stay.departure = { kind: 'transfer', place: fact.to ?? KARBALA, flight: null, airline: null };
-      }
+    counts.total += 1;
+    if (a.IsLead && !counts.leader) counts.leader = clean(`${a.FirstName ?? a.First_name ?? ''} ${a.LastName ?? a.Surname ?? ''}`) || clean(a.fullname);
+    const option = Number(a.AccomodationOptionId);
+    if (option === ACCOMMODATION_NOT_REQUIRED) {
+      if (a.IsInfant) counts.infants += 1;
+      else counts.notRequired += 1;
+    } else if (option === ACCOMMODATION_REQUIRED) {
+      if (!a.IsInfant) counts.required += 1;
+    } else {
+      counts.unknown += 1;
     }
   }
+  return counts;
+}
 
-  // Groups the dashboards show in Najaf that the tour lists did not return.
-  const extras = [];
-  for (const [tourId, { facts: list }] of orphans) {
-    const first = list[0];
-    const arrivalFact = list.find((f) => f.kind === 'arrival' || f.kind === 'transfer-in');
-    const departureFact = list.find((f) => f.kind === 'departure' || f.kind === 'transfer-out');
-    const checkIn = arrivalFact?.date ?? from;
-    const checkOut = departureFact?.date ?? null;
-    if (!checkOut || checkOut < checkIn) continue;
-    extras.push({
-      id: `${tourId}:dashboard`,
-      tourId,
-      planId: 0,
-      ref: first.ref,
-      tourNo: first.tourNo,
-      office: first.office,
-      leader: first.leader,
-      pax: first.pax,
-      paxTotal: first.paxTotal,
-      paxNkerpHoused: Math.max(0, first.paxTotal - first.pax),
-      checkIn,
-      checkOut,
-      arrivalAt: arrivalFact?.at ?? null,
-      departureAt: departureFact?.at ?? null,
-      arrival: !arrivalFact
-        ? { kind: 'unknown', place: '', flight: null }
-        : arrivalFact.kind === 'arrival'
-          ? { kind: 'airport', place: arrivalFact.port ?? '', flight: arrivalFact.flight }
-          : { kind: 'transfer', place: arrivalFact.from ?? KARBALA, flight: null },
-      departure:
-        departureFact.kind === 'departure'
-          ? { kind: 'airport', place: departureFact.port ?? '', flight: departureFact.flight, airline: airlineOf(departureFact.flight) }
-          : { kind: 'transfer', place: departureFact.to ?? KARBALA, flight: null, airline: null },
-      secondLeg: arrivalFact?.kind === 'transfer-in' && upper(arrivalFact.from) === KARBALA,
-      seenIn: { tourList: false, dashboard: true },
-      notes: [
-        arrivalFact
-          ? 'Found on the transport dashboard only, not in the Najaf tour list.'
-          : `Found on the transport dashboard only. Already in Najaf on ${from}; the arrival date is not known.`,
-      ],
-    });
-  }
-  return [...stays, ...extras];
+/** Fills a stay's guest numbers from its tour's guest count. */
+export function withGuests(stay, counts) {
+  const notes = [...stay.notes];
+  if (counts.infants) notes.push(`${counts.infants} ${counts.infants === 1 ? 'infant' : 'infants'} too, sharing a bed.`);
+  if (counts.unknown) notes.push(`${counts.unknown} ${counts.unknown === 1 ? 'guest has' : 'guests have'} no accommodation choice in NKERP.`);
+  return {
+    ...stay,
+    leader: counts.leader || stay.leader,
+    pax: counts.notRequired,
+    infants: counts.infants,
+    paxTotal: counts.total || stay.paxTotal,
+    paxNkerpHoused: counts.required,
+    notes,
+  };
 }

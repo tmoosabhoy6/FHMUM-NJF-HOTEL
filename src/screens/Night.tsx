@@ -65,7 +65,7 @@ function Facade({ dates, progress, pulling }: { dates: string[]; progress: PullP
             </span>
           </>
         ) : (
-          <span>Each window is one day. They light up as the day is read from NKERP.</span>
+          <span>Each window is one day. It lights up once every group arriving by then has been counted.</span>
         )}
       </div>
     </div>
@@ -131,7 +131,7 @@ export function Night(props: Props) {
                   <b>
                     <Num value={progress.groups} />
                   </b>
-                  <span>groups arranging their own hotel</span>
+                  <span>groups with guests who need a hotel</span>
                 </div>
                 <div>
                   <b>
@@ -145,8 +145,8 @@ export function Night(props: Props) {
             <motion.div key="start" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
               <h1>Know which hotel, before they land.</h1>
               <p className="lede">
-                Pulls every approved FH Mumbai group staying in Najaf from NKERP, then places each one in Ruya, Araf or Hotel C,
-                night by night.
+                Pulls every approved FH Mumbai tour staying in Najaf from NKERP, counts the guests who need a hotel, then places each
+                group in Ruya, Araf or Hotel C, night by night.
               </p>
               <form
                 className="pull-form"

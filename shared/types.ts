@@ -8,10 +8,19 @@ export interface Group {
   tourNo: string;
   office: string;
   leader: string;
-  /** Guests the group houses itself ("accommodation not required" in NKERP). */
+  /**
+   * Guests who need a bed from us: every active guest on the tour marked
+   * "accommodation not required" in NKERP, infants not counted (no bed).
+   */
   pax: number;
+  /** Infants among those guests (they share a bed, so they are not in `pax`). */
+  infants: number;
+  /** All active guests on the tour. */
   paxTotal: number;
+  /** Guests NKERP houses itself ("accommodation required"). */
   paxNkerpHoused: number;
+  /** NKERP tour status, e.g. "Approved", "Current". */
+  status: string;
   /** Najaf arrival date, YYYY-MM-DD. */
   checkIn: string;
   /** Najaf departure date, YYYY-MM-DD. */
@@ -22,7 +31,6 @@ export interface Group {
   departure: { kind: 'airport' | 'transfer' | 'unknown'; place: string; flight: string | null; airline: string | null };
   /** Came to Najaf from Karbala, so Najaf is the second half of the trip. */
   secondLeg: boolean;
-  seenIn: { tourList: boolean; dashboard: boolean };
   notes: string[];
 }
 
@@ -33,9 +41,14 @@ export interface PullMeta {
   to: string | null;
   through: string;
   fetchedAt: string;
+  /** Approved Najaf stays in the range, whatever their accommodation. */
   approvedStays: number;
+  /** Of those, stays where NKERP houses every guest (not planned here). */
   nkerpHousedOnly: number;
-  daysRead: number;
+  /** Tours in the range that are not approved yet (Pending, Draft…), so not planned. */
+  notApproved: number;
+  /** Guest lists read, one per tour. */
+  toursRead: number;
   requests: number;
   seconds: number;
 }
@@ -65,10 +78,19 @@ export interface Settings {
   departureDayRule: boolean;
 }
 
+/** One Ruya room as listed on the hotel's sheet. */
+export interface RuyaRoom {
+  no: string;
+  beds: number;
+  floor: number;
+}
+
 /** What a person typed for one group. */
 export interface GroupInput {
-  /** Rooms needed in Ruya, as typed. */
+  /** Rooms needed in Ruya, as typed or pasted. */
   spec?: string;
+  /** What the pasted room-request message said, kept to check against NKERP. */
+  message?: { hotelPax: number | null; from: string | null; to: string | null; leader: string | null };
   /** Keep this group in a chosen hotel instead of letting the planner decide. */
   pin?: HotelId | null;
 }
@@ -85,6 +107,8 @@ export interface Hold {
   to: string;
   /** Bed counts of the Ruya rooms held, when known. */
   rooms?: number[];
+  /** Exact Ruya room numbers held (takes precedence over `rooms`). */
+  roomLabels?: string[];
 }
 
 /** Why a group is where it is. */
@@ -157,6 +181,12 @@ export interface Plan {
   /** All Ruya rooms, when the room list is known. */
   rooms: Room[];
   placements: Record<string, Placement>;
+  /**
+   * Groups that reached Najaf before the planning start. They are housed
+   * under the earlier arrangement (the opening balance), so they are not
+   * placed unless someone keeps them in a hotel by hand.
+   */
+  before: string[];
   days: DayRow[];
   bookings: Booking[];
   totals: {

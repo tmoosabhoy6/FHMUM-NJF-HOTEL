@@ -1,29 +1,42 @@
 import { motion } from 'motion/react';
 import { useEffect } from 'react';
-import { EXAMPLE_ROOMS, OPENING_BALANCE } from '../../shared/config';
-import type { RoomType, Settings } from '../../shared/types';
+import { OPENING_BALANCE, RUYA_SHEET, RUYA_WITHHELD } from '../../shared/config';
+import { dayMonth } from '../../shared/dates';
+
+/** What a person can change, saved on this device. */
+export interface Prefs {
+  arafCapacity: number;
+  departureDayRule: boolean;
+  /** Ruya room numbers left out of the plan. */
+  withheld: string[];
+}
 
 interface Props {
-  settings: Settings;
-  onChange: (settings: Settings) => void;
+  prefs: Prefs;
+  /** Ruya beds in use with the current choice of rooms. */
+  beds: number;
+  onChange: (prefs: Prefs) => void;
   onClose: () => void;
   onClearInputs: () => void;
   typedCount: number;
 }
 
-export function SettingsDrawer({ settings, onChange, onClose, onClearInputs, typedCount }: Props) {
+const FLOOR = ['', 'First floor', 'Second floor', 'Third floor'];
+
+export function SettingsDrawer({ prefs, beds, onChange, onClose, onClearInputs, typedCount }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const rooms = settings.rooms;
-  const beds = rooms.reduce((sum, r) => sum + r.beds * r.count, 0);
-  const count = rooms.reduce((sum, r) => sum + r.count, 0);
-  const setRooms = (next: RoomType[]) => onChange({ ...settings, rooms: next });
-  const patchRoom = (i: number, patch: Partial<RoomType>) => setRooms(rooms.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const out = new Set(prefs.withheld);
+  const rooms = RUYA_SHEET.filter((r) => !out.has(r.no)).length;
+  const floors = [...new Set(RUYA_SHEET.map((r) => r.floor))];
+  const toggle = (no: string) =>
+    onChange({ ...prefs, withheld: out.has(no) ? prefs.withheld.filter((n) => n !== no) : [...prefs.withheld, no].sort() });
   const whole = (value: string, min: number, max: number) => Math.min(max, Math.max(min, Math.round(Number(value) || 0)));
+  const isDefault = [...prefs.withheld].sort().join() === [...RUYA_WITHHELD].sort().join();
 
   return (
     <>
@@ -46,76 +59,66 @@ export function SettingsDrawer({ settings, onChange, onClose, onClearInputs, typ
         </div>
         <div className="drawer-body">
           <section className="set">
-            <h3>Beds</h3>
-            <p>Hotels fill in this order: Ruya, then Araf, then Hotel C, which has no limit.</p>
-            <div className="set-grid">
-              <label>
-                Ruya
-                <input
-                  type="number"
-                  min={0}
-                  value={rooms.length ? beds : settings.ruyaCapacity}
-                  disabled={rooms.length > 0}
-                  onChange={(e) => onChange({ ...settings, ruyaCapacity: whole(e.target.value, 0, 2000) })}
-                />
-              </label>
-              <label>
-                Araf
-                <input type="number" min={0} value={settings.arafCapacity} onChange={(e) => onChange({ ...settings, arafCapacity: whole(e.target.value, 0, 2000) })} />
-              </label>
-            </div>
-            {rooms.length ? <p>Ruya’s beds come from the room list below.</p> : null}
-          </section>
-
-          <section className="set">
-            <h3>Ruya room list</h3>
+            <h3>Ruya</h3>
             <p>
-              One line per room size. With a room list, each group gets exact rooms and you can see who is in which room every
-              night. Without one, Ruya is planned by head count.
+              {rooms} rooms, <b>{beds} beds</b> in the plan. Tap a room to leave it out of the plan or put it back.
             </p>
-            <div className="room-rows">
-              {rooms.map((room, i) => (
-                <div className="room-row" key={i}>
-                  <label>
-                    Beds in the room
-                    <input type="number" min={1} max={20} value={room.beds} onChange={(e) => patchRoom(i, { beds: whole(e.target.value, 1, 20) })} />
-                  </label>
-                  <label>
-                    Rooms like this
-                    <input type="number" min={0} max={200} value={room.count} onChange={(e) => patchRoom(i, { count: whole(e.target.value, 0, 200) })} />
-                  </label>
-                  <button className="btn quiet" aria-label={`Remove the ${room.beds}-bed line`} onClick={() => setRooms(rooms.filter((_, j) => j !== i))}>
-                    ✕
-                  </button>
+            <div className="floors">
+              {floors.map((floor) => (
+                <div className="floor" key={floor}>
+                  <span className="floor-name">{FLOOR[floor] ?? `Floor ${floor}`}</span>
+                  <div className="floor-rooms">
+                    {RUYA_SHEET.filter((r) => r.floor === floor).map((room) => (
+                      <button
+                        key={room.no}
+                        type="button"
+                        className="room-key"
+                        data-out={out.has(room.no)}
+                        aria-pressed={!out.has(room.no)}
+                        title={out.has(room.no) ? `Room ${room.no} (${room.beds} beds): left out` : `Room ${room.no} (${room.beds} beds): in the plan`}
+                        onClick={() => toggle(room.no)}
+                      >
+                        <b>{room.no}</b>
+                        <span>{room.beds} beds</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
-            <div className="room-actions">
-              <button className="btn" onClick={() => setRooms([...rooms, { beds: (rooms[rooms.length - 1]?.beds ?? 1) + 1, count: 1 }])}>
-                Add a room size
-              </button>
-              {rooms.length ? (
-                <button className="btn quiet" onClick={() => setRooms([])}>
-                  Clear the list
+            {!isDefault ? (
+              <div className="room-actions">
+                <button className="btn quiet" onClick={() => onChange({ ...prefs, withheld: RUYA_WITHHELD })}>
+                  Back to rooms {RUYA_WITHHELD.join(', ')} left out
                 </button>
-              ) : (
-                <button className="btn quiet" onClick={() => setRooms(EXAMPLE_ROOMS)}>
-                  Use an example list
-                </button>
-              )}
-              {rooms.length ? (
-                <span className="room-sum">
-                  {count} rooms · {beds} beds
-                </span>
-              ) : null}
+              </div>
+            ) : null}
+          </section>
+
+          <section className="set">
+            <h3>Araf</h3>
+            <div className="set-grid">
+              <label>
+                Beds
+                <input type="number" min={0} value={prefs.arafCapacity} onChange={(e) => onChange({ ...prefs, arafCapacity: whole(e.target.value, 0, 2000) })} />
+              </label>
             </div>
-            {!rooms.length ? <p style={{ marginTop: 10 }}>The example is made up to preview the room view. It is not Ruya’s real list.</p> : null}
+            <p>Used when Ruya cannot take a group. Hotel C takes everyone else and has no limit.</p>
+          </section>
+
+          <section className="set">
+            <h3>Already in Ruya on the first night</h3>
+            {OPENING_BALANCE.map((hold) => (
+              <p key={hold.id}>
+                Rooms {hold.roomLabels?.join(', ')} are taken until {dayMonth(hold.to)} ({hold.pax} beds).
+              </p>
+            ))}
           </section>
 
           <section className="set">
             <h3>Iraqi Airways departures</h3>
             <label className="switch">
-              <input type="checkbox" checked={settings.departureDayRule} onChange={(e) => onChange({ ...settings, departureDayRule: e.target.checked })} />
+              <input type="checkbox" checked={prefs.departureDayRule} onChange={(e) => onChange({ ...prefs, departureDayRule: e.target.checked })} />
               <span>
                 Count the departure day as a night when Najaf is the second half of the trip and the group flies Iraqi Airways from
                 Najaf Airport.
@@ -124,18 +127,9 @@ export function SettingsDrawer({ settings, onChange, onClose, onClearInputs, typ
           </section>
 
           <section className="set">
-            <h3>Opening balance</h3>
+            <h3>Room requests and hotel choices</h3>
             <p>
-              {OPENING_BALANCE.length
-                ? `${OPENING_BALANCE.length} entries carried in from before the first night.`
-                : 'None loaded yet. Guests already in a hotel before the first night are placed by the planner like everyone else until the end-of-November counts are added.'}
-            </p>
-          </section>
-
-          <section className="set">
-            <h3>Typed rooms and hotel choices</h3>
-            <p>
-              {typedCount ? `Saved on this device for ${typedCount} ${typedCount === 1 ? 'group' : 'groups'}.` : 'Nothing typed yet.'} They stay when you pull
+              {typedCount ? `Saved on this device for ${typedCount} ${typedCount === 1 ? 'tour' : 'tours'}.` : 'Nothing saved yet.'} They stay when you pull
               again.
             </p>
             <div className="room-actions">
@@ -143,10 +137,10 @@ export function SettingsDrawer({ settings, onChange, onClose, onClearInputs, typ
                 className="btn"
                 disabled={!typedCount}
                 onClick={() => {
-                  if (window.confirm('Clear the rooms and hotel choices typed for every group?')) onClearInputs();
+                  if (window.confirm('Clear the room requests and hotel choices saved for every tour?')) onClearInputs();
                 }}
               >
-                Clear what was typed
+                Clear them all
               </button>
             </div>
           </section>

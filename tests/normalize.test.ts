@@ -1,91 +1,194 @@
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module shared with the server
-import { airlineOf, collapseReissues, reconcile, selfHousedPax, stayFromCensusRow, dashboardFact } from '../server/nkerp/normalize.mjs';
+import { isAllowedRead } from '../server/nkerp/client.mjs';
+// @ts-expect-error plain JS module shared with the server
+import { airlineOf, countGuests, endDateOf, isApprovedTour, staysFromGroupRow, withGuests } from '../server/nkerp/normalize.mjs';
+// @ts-expect-error plain JS module shared with the server
+import { runSync } from '../server/nkerp/sync.mjs';
 
-const row = (over: Record<string, unknown> = {}, tour: Record<string, unknown> = {}) => ({
-  TourId: 1,
-  TourSubVenuePlanId: 10,
-  ArrivalDate: '2026-12-07T11:00:00',
-  DepartureDate: '2026-12-11T21:00:00',
-  GroupLead: 'Leader',
-  Tour: {
-    ReferenceNo: 'NKERP/TOUR/2026/2757',
-    OfficeName: 'Fayz E Husayni Trust Mumbai',
-    PaxCount: 64,
-    PaxRequiredAcc: 0,
-    PaxNotRequiredAcc: 64,
-    IsApprovedWithAccommodation: false,
-    EntryPortName: 'Najaf Airport',
-    ExitPortName: 'Najaf Airport',
-    TransportItinerary: [{ Id: 1, IsActive: true, ArrivalTransportCode: 'IA 450', DepartureTransportCode: 'IA 449', ArrivalDateTimeZone: '2026-12-01T06:30:00', DepartureDateTimeZone: '2026-12-11T21:00:00' }],
-    TourIternerayBreakUp: [
-      { From: 'Najaf Airport', To: 'KARBALA', TravelType: 'A', Date: '2026-12-01T00:00:00', IsActive: true },
-      { From: 'NAJAF', To: 'Najaf Airport', TravelType: 'D', Date: '2026-12-11T00:00:00', IsActive: true },
-      { From: 'KARBALA', To: 'NAJAF', TravelType: 'S', Date: '2026-12-07T00:00:00', IsActive: true },
-    ],
-    ...tour,
-  },
+const OFFICE = 'Fayz E Husayni Trust Mumbai';
+const plan = (id: number, venue: 'NAJAF' | 'KARBALA', start: string, end: string, extra: Record<string, unknown> = {}) => ({
+  Id: id,
+  SubvenueId: venue === 'NAJAF' ? 3 : 4,
+  SubvenueName: venue,
+  StartDateTimeZone: `${start}T00:00:00`,
+  EndDateTimeZone: end,
+  IsActive: true,
+  IsRemoved: false,
+  ...extra,
+});
+
+/** A General search → Groups row, shaped as NKERP sends it (made-up tour). */
+const tourRow = (over: Record<string, unknown> = {}) => ({
+  TourId: 5001,
+  ReferenceNo: 'NKERP/TOUR/2026/9001',
+  OfficeName: OFFICE,
+  Status: 'Approved',
+  IsActive: true,
+  PaxCount: 6,
+  StartDate: '2026-12-03T11:00:00',
+  EntryPort: 'Najaf Airport',
+  ExitPort: 'Najaf Airport',
+  lstTransportItinerary: [
+    {
+      Id: 1,
+      IsActive: true,
+      ArrivalTransportCode: 'IA 442',
+      ArrivalDateTimeZone: '2026-12-03T06:30:00',
+      DepartureTransportCode: 'IA 441',
+      DepartureDateTimeZone: '2026-12-11T21:00:00',
+    },
+  ],
+  lstSubVenuePlan: [plan(11, 'KARBALA', '2026-12-03', '2026-12-06T23:59:59.997'), plan(12, 'NAJAF', '2026-12-07', '2026-12-11T00:00:00')],
   ...over,
 });
 
-describe('reading a Najaf tour row', () => {
-  it('finds the stay, the Karbala leg and the Iraqi Airways departure', () => {
-    const stay = stayFromCensusRow(row());
+const person = (over: Record<string, unknown>) => ({
+  IsActive: true,
+  IsCancellation: false,
+  IsDummy: false,
+  IsInfant: false,
+  IsLead: false,
+  AccomodationOptionId: 2,
+  FirstName: 'Guest',
+  LastName: 'Sample',
+  ...over,
+});
+
+describe('reading a tour from General search', () => {
+  it('finds the Najaf stay after Karbala, flying Iraqi Airways out of Najaf', () => {
+    const [stay] = staysFromGroupRow(tourRow());
     expect(stay).toMatchObject({
-      tourNo: '2757',
-      pax: 64,
+      id: '5001:12',
+      tourNo: '9001',
       checkIn: '2026-12-07',
       checkOut: '2026-12-11',
       secondLeg: true,
       arrival: { kind: 'transfer', place: 'KARBALA' },
-      departure: { kind: 'airport', place: 'Najaf Airport', flight: 'IA 449', airline: 'IA' },
+      departure: { kind: 'airport', place: 'Najaf Airport', flight: 'IA 441', airline: 'IA' },
+      departureAt: '2026-12-11T21:00:00',
     });
   });
-  it('treats an airport arrival into Najaf as the first leg', () => {
-    const stay = stayFromCensusRow(
-      row(
-        { ArrivalDate: '2026-12-08T07:00:00', DepartureDate: '2026-12-12T08:00:00' },
-        {
-          TourIternerayBreakUp: [
-            { From: 'Najaf Airport', To: 'NAJAF', TravelType: 'A', Date: '2026-12-08T00:00:00' },
-            { From: 'NAJAF', To: 'KARBALA', TravelType: 'S', Date: '2026-12-12T00:00:00' },
-            { From: 'KARBALA', To: 'Najaf Airport', TravelType: 'D', Date: '2026-12-17T00:00:00' },
-          ],
-        },
-      ),
+  it('rolls a 23:59 plan end over to the moving day, and reads a first-leg Najaf stay', () => {
+    expect(endDateOf('2026-11-23T23:59:59.997')).toBe('2026-11-24');
+    expect(endDateOf('2026-11-24T00:00:00')).toBe('2026-11-24');
+    const [stay] = staysFromGroupRow(
+      tourRow({
+        EntryPort: 'Baghdad Airport',
+        lstSubVenuePlan: [plan(21, 'NAJAF', '2026-12-01', '2026-12-04T23:59:59.997'), plan(22, 'KARBALA', '2026-12-05', '2026-12-09T00:00:00')],
+      }),
     );
-    expect(stay.secondLeg).toBe(false);
-    expect(stay.arrival).toMatchObject({ kind: 'airport', flight: 'IA 450' });
+    expect(stay).toMatchObject({ checkIn: '2026-12-01', checkOut: '2026-12-05', secondLeg: false, arrival: { kind: 'airport', place: 'Baghdad Airport' } });
     expect(stay.departure).toMatchObject({ kind: 'transfer', place: 'KARBALA', airline: null });
   });
-  it('counts only the guests who arrange their own hotel', () => {
-    expect(selfHousedPax({ pax: 31, required: 8, notRequired: 23, approvedWithAccommodation: true })).toBe(23);
-    expect(selfHousedPax({ pax: 12, required: 0, notRequired: 0, approvedWithAccommodation: false })).toBe(12);
-    expect(selfHousedPax({ pax: 12, required: 12, notRequired: 0, approvedWithAccommodation: true })).toBe(0);
+  it('gives each Najaf visit of a tour its own stay and skips removed plans', () => {
+    const stays = staysFromGroupRow(
+      tourRow({
+        lstSubVenuePlan: [
+          plan(31, 'NAJAF', '2026-12-01', '2026-12-03T23:59:59.997'),
+          plan(32, 'KARBALA', '2026-12-04', '2026-12-06T23:59:59.997'),
+          plan(33, 'NAJAF', '2026-12-07', '2026-12-10T00:00:00'),
+          plan(34, 'NAJAF', '2026-12-20', '2026-12-22T00:00:00', { IsRemoved: true }),
+        ],
+      }),
+    );
+    expect(stays.map((s: { checkIn: string; checkOut: string }) => `${s.checkIn}→${s.checkOut}`)).toEqual(['2026-12-01→2026-12-04', '2026-12-07→2026-12-10']);
+  });
+  it('treats Approved, Current and Completed as approved, nothing else', () => {
+    expect(['Approved', 'Current', 'Completed'].map((Status) => isApprovedTour({ Status, IsActive: true }))).toEqual([true, true, true]);
+    expect(['Pending', 'Draft', 'Deleted'].map((Status) => isApprovedTour({ Status, IsActive: true }))).toEqual([false, false, false]);
+    expect(isApprovedTour({ Status: 'Approved', IsActive: false })).toBe(false);
   });
   it('reads airline codes', () => {
-    expect(airlineOf('IA 441')).toBe('IA');
-    expect(airlineOf('IA441')).toBe('IA');
-    expect(airlineOf('FZ 221 EVE')).toBe('FZ');
-    expect(airlineOf('G9 374')).toBe('G9');
-    expect(airlineOf('')).toBeNull();
-  });
-  it('keeps the newest plan when a tour was reissued for overlapping dates', () => {
-    const a = stayFromCensusRow(row());
-    const b = stayFromCensusRow(row({ TourSubVenuePlanId: 11, ArrivalDate: '2026-12-08T11:00:00' }));
-    expect(collapseReissues([a, b]).map((s: { planId: number }) => s.planId)).toEqual([11]);
+    expect(['IA 441', 'FZ 221 EVE', 'G9 374', 'Iraqi Airways 12', ''].map(airlineOf)).toEqual(['IA', 'FZ', 'G9', 'IA', null]);
   });
 });
 
-describe('checking against the transport dashboards', () => {
-  it('notes a different departure date and adds a group the lists missed', () => {
-    const stay = stayFromCensusRow(row());
-    const dep = { ...dashboardFact('departure', { TourId: 1, TourReferenceNo: 'NKERP/TOUR/2026/2757', OfficeName: 'x', NoOfPax: 64, PaxRequiredAcc: 0, PaxNotRequiredAcc: 64, Accommodation: false, FlightCode: 'IA 449', DeparturePort: 'Najaf Airport', DepartureTimeWithTimeZone: '2026-12-12T21:00:00' }), queried: '2026-12-12' };
-    const strayIn = { ...dashboardFact('transfer-in', { TourId: 2, TourReferenceNo: 'NKERP/TOUR/2026/3000', OfficeName: 'x', NoOfPax: 9, PaxRequiredAcc: 0, PaxNotRequiredAcc: 9, Accommodation: false, SubVenueFrom: 'KARBALA', SubVenueTo: 'NAJAF', ArrivalDepartureTime: '2026-12-09T11:00:00' }), queried: '2026-12-09' };
-    const strayOut = { ...dashboardFact('departure', { TourId: 2, TourReferenceNo: 'NKERP/TOUR/2026/3000', OfficeName: 'x', NoOfPax: 9, PaxRequiredAcc: 0, PaxNotRequiredAcc: 9, Accommodation: false, FlightCode: 'IA 441', DeparturePort: 'Najaf Airport', DepartureTimeWithTimeZone: '2026-12-13T18:30:00' }), queried: '2026-12-13' };
-    const out = reconcile([stay], [dep, strayIn, strayOut], { from: '2026-12-01' });
-    expect(out[0].notes.join(' ')).toContain('2026-12-12');
-    expect(out[1]).toMatchObject({ tourNo: '3000', pax: 9, checkIn: '2026-12-09', checkOut: '2026-12-13', secondLeg: true, seenIn: { tourList: false, dashboard: true } });
-    expect(out[1].departure.airline).toBe('IA');
+describe('counting guests person by person', () => {
+  const guests = [
+    person({ IsLead: true, FirstName: 'Lead', LastName: 'Person', AccomodationOptionId: 2 }),
+    person({ AccomodationOptionId: 2 }),
+    person({ AccomodationOptionId: 3 }),
+    person({ AccomodationOptionId: 3 }),
+    person({ AccomodationOptionId: 3, IsInfant: true }),
+    person({ AccomodationOptionId: 3, IsCancellation: true }),
+    person({ AccomodationOptionId: 3, IsDummy: true }),
+    person({ AccomodationOptionId: 3, IsActive: false }),
+  ];
+  it('counts only active guests marked "accommodation not required", infants apart, on a tour NKERP otherwise houses', () => {
+    expect(countGuests(guests)).toMatchObject({ total: 5, required: 2, notRequired: 2, infants: 1, cancelled: 3, leader: 'Lead Person' });
+  });
+  it('fills the stay with those numbers', () => {
+    const [stay] = staysFromGroupRow(tourRow());
+    const filled = withGuests(stay, countGuests(guests));
+    expect(filled).toMatchObject({ pax: 2, infants: 1, paxTotal: 5, paxNkerpHoused: 2, leader: 'Lead Person' });
+    expect(filled.notes.join(' ')).toMatch(/1 infant/);
+  });
+});
+
+describe('NKERP stays read-only', () => {
+  it('allows only the group search and guest-list reads', () => {
+    expect(isAllowedRead('api/tours/GeneralSearchGroups', 'POST')).toBe(true);
+    expect(isAllowedRead('api/tours/getApplicants/428789642', 'GET')).toBe(true);
+    expect(isAllowedRead('api/tours/getApplicants/42; drop', 'GET')).toBe(false);
+    expect(isAllowedRead('api/tours/UpdateZiyaratStatus/1/false/4', 'GET')).toBe(false);
+    expect(isAllowedRead('api/Property/saveRoomallocationApplicantsDetails', 'POST')).toBe(false);
+    expect(isAllowedRead('api/tours/getApplicants/1', 'POST')).toBe(false);
+  });
+});
+
+describe('the pull', () => {
+  /** A stand-in for NKERP: one page of tours and a guest list per tour. */
+  function fakeClient(rows: Record<string, unknown>[], lists: Record<number, Record<string, unknown>[]>) {
+    const calls: string[] = [];
+    return {
+      calls,
+      requests: 0,
+      async login() {
+        return { reused: false };
+      },
+      async read(path: string, body?: unknown) {
+        this.requests += 1;
+        calls.push(`${body === undefined ? 'GET' : 'POST'} ${path}`);
+        if (path === 'api/tours/GeneralSearchGroups') return { lstGeneralGroupsSearch: rows, TotalRows: rows.length };
+        const id = Number(path.split('/').pop());
+        return { Applicants: lists[id] ?? [] };
+      },
+    };
+  }
+
+  it('keeps approved tours with guests who need a hotel, including part-housed tours, and counts pending ones', async () => {
+    const rows = [
+      tourRow(), // mixed: 2 of 4 need a hotel
+      tourRow({ TourId: 5002, ReferenceNo: 'NKERP/TOUR/2026/9002' }), // all housed by NKERP
+      tourRow({ TourId: 5003, ReferenceNo: 'NKERP/TOUR/2026/9003', Status: 'Pending', lstSubVenuePlan: [] }),
+      tourRow({ TourId: 5004, ReferenceNo: 'NKERP/TOUR/2026/9004', OfficeName: 'Another office' }),
+      tourRow({ TourId: 5005, ReferenceNo: 'NKERP/TOUR/2026/9005', lstSubVenuePlan: [plan(51, 'NAJAF', '2026-10-01', '2026-10-04T00:00:00')] }), // out of range
+    ];
+    const lists = {
+      5001: [person({ IsLead: true, FirstName: 'A', LastName: 'B' }), person({}), person({ AccomodationOptionId: 3 }), person({ AccomodationOptionId: 3 })],
+      5002: [person({}), person({})],
+    };
+    const client = fakeClient(rows, lists);
+    const events: string[] = [];
+    const lit: string[] = [];
+    const result = await runSync({
+      client,
+      from: '2026-12-01',
+      office: OFFICE,
+      emit: (event: string, data: { date?: string }) => {
+        events.push(event);
+        if (event === 'day' && data.date) lit.push(data.date);
+      },
+    });
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0]).toMatchObject({ tourNo: '9001', pax: 2, paxNkerpHoused: 2, leader: 'A B' });
+    expect(result.meta).toMatchObject({ approvedStays: 2, nkerpHousedOnly: 1, notApproved: 1, toursRead: 2 });
+    expect(client.calls.filter((c) => c.startsWith('GET'))).toEqual(['GET api/tours/getApplicants/5001', 'GET api/tours/getApplicants/5002']);
+    // Every day of the range lights, in order.
+    expect(lit[0]).toBe('2026-12-01');
+    expect(lit[lit.length - 1]).toBe('2026-12-11');
+    expect(lit).toEqual([...lit].sort());
+    expect(events).toContain('tours');
   });
 });

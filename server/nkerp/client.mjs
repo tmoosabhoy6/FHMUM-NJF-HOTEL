@@ -13,15 +13,18 @@ const DEFAULT_BASE = 'https://to.najafkarbala.com/NKERPApi/';
 
 /** POST searches that only read. */
 export const READ_POSTS = new Set([
-  'api/VisitingPoint/MuwafiqaApprovedTours',
-  'api/VisitingPoint/getScheduledTours',
-  'api/VisitingPoint/getPartialScheduledTours',
-  'api/VisitingPoint/getReleasedTours',
-  'api/vehicle/getArrivals',
-  'api/vehicle/getDepartures',
-  'api/vehicle/getSubVenueTransfers',
-  'api/vehicle/getStayInSubvenuev2',
+  // General search → Groups: every tour of the office with its sub-venue plans and flights.
+  'api/tours/GeneralSearchGroups',
 ]);
+
+/** GET reads, by exact shape (some NKERP GET routes change data, so nothing else is allowed). */
+export const READ_GETS = [
+  // A tour's guest list, one row per person, with their accommodation choice.
+  /^api\/tours\/getApplicants\/\d{1,12}$/,
+];
+
+export const isAllowedRead = (path, method) =>
+  method === 'GET' ? READ_GETS.some((pattern) => pattern.test(path)) : READ_POSTS.has(path);
 
 /** Scheduling role that can read Najaf once Najaf is selected. */
 const PREFERRED_ROLE = '13';
@@ -163,9 +166,11 @@ export class NkerpClient {
     }
   }
 
-  /** One allowlisted read. Signs in again once if the session has expired. */
+  /** One allowlisted read: a POST search with `body`, or a GET when `body` is undefined. Signs in again once if the session has expired. */
   async read(path, body, { signal } = {}) {
-    if (!READ_POSTS.has(path)) throw new NkerpError(`"${path}" is not on the read-only allowlist`, { status: 500 });
+    if (!isAllowedRead(path, body === undefined ? 'GET' : 'POST')) {
+      throw new NkerpError(`"${path}" is not on the read-only allowlist`, { status: 500 });
+    }
     await this.login({ signal });
     try {
       return await this.#raw(path, body, { signal });

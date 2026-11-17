@@ -1,404 +1,523 @@
-import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { HOTEL_NAME, HOTEL_ORDER } from '../../shared/engine';
-import { dayMonth, dayNumber, daysBetween, fullDate, monthShort, rangeLabel, weekdayLong, weekdayShort } from '../../shared/dates';
-import type { Booking, DayRow, Group, HotelId, Placement, Plan } from '../../shared/types';
-import { Chevron, guests, groupsText, nightsText, Num, tint } from '../components/ui';
+import { motion } from 'motion/react';
+import { Fragment, useMemo, useState, type CSSProperties } from 'react';
+import { OPENING_BALANCE, PLANNING_START, RUYA_SHEET } from '../../shared/config';
+import { dayLabel, dayMonth, daysBetween, fullDate, rangeLabel } from '../../shared/dates';
+import { HOTEL_NAME, HOTEL_ORDER, REASON_LABEL } from '../../shared/engine';
+import { describeRooms, parseRoomSpec } from '../../shared/roomSpec';
+import type { DayRow, Group, GroupInput, HotelId, Placement, Plan, PullMeta } from '../../shared/types';
+import { guests, groupsText, nightsText, Num, tint } from '../components/ui';
 
 interface Props {
   groups: Group[];
   plan: Plan;
-  date: string;
-  onDate: (date: string) => void;
-  onOpenSettings: () => void;
-  onOpenGroups: () => void;
+  meta: PullMeta;
+  inputs: Record<string, GroupInput | undefined>;
+  onInput: (tourNo: string, patch: GroupInput) => void;
+  onOpenRequests: () => void;
 }
 
-const SHORT_REASON: Partial<Record<Placement['reason'], string>> = {
+const SHORT: Partial<Record<Placement['reason'], string>> = {
   'room-mix': 'Rooms not available in Ruya',
-  'ruya-full': 'Ruya full',
-  'araf-full': 'Ruya and Araf full',
-  pinned: 'Kept by hand',
-  held: 'Opening balance',
+  'ruya-full': 'Ruya is full',
+  'araf-full': 'Ruya and Araf are full',
+  pinned: 'Kept here by hand',
 };
 
-function BookingCard({ booking, tours, onOpen }: { booking: Booking; tours: string; onOpen: () => void }) {
-  const checkout = rangeLabel(booking.from, booking.lastNight);
+const nightsBetween = (from: string, lastNight: string) => daysBetween(from, lastNight) + 1;
+
+// ---- summary --------------------------------------------------------------
+
+function HotelTile({ hotel, plan }: { hotel: HotelId; plan: Plan }) {
+  const t = plan.totals.byHotel[hotel];
+  const nightsUsed = plan.days.filter((d) => d.hotels[hotel].pax > 0).length;
+  const cap = hotel === 'ruya' ? plan.capacity.ruya : hotel === 'araf' ? plan.capacity.araf : null;
   return (
-    <motion.button
-      layout
-      className="booking"
-      data-hotel={booking.hotel}
-      onClick={onOpen}
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.97 }}
-      transition={{ duration: 0.35, ease: [0.2, 0.8, 0.2, 1] }}
-    >
-      <div className="booking-hotel">Book {HOTEL_NAME[booking.hotel]}</div>
-      <div className="booking-dates">{checkout}</div>
-      <div className="booking-meta">
-        {nightsText(booking.nights)} · up to {guests(booking.peak)} · tours {tours}
+    <div className="tile" data-hotel={hotel} data-idle={t.groups === 0}>
+      <div className="tile-name">
+        {HOTEL_NAME[hotel]}
+        <span>{cap ? `${cap} beds` : 'no limit'}</span>
       </div>
-      {booking.steps.length > 1 ? (
-        <ul className="booking-steps">
-          {booking.steps.map((step) => (
-            <li key={step.from}>
-              <span>{rangeLabel(step.from, step.lastNight)}</span>
-              <b>{guests(step.pax)}</b>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </motion.button>
-  );
-}
-
-/** One lane per hotel, one column per night. Click a night to open it. */
-function Ledger({ plan, date, onDate, byId }: { plan: Plan; date: string; onDate: (d: string) => void; byId: Map<string, Group> }) {
-  const scroller = useRef<HTMLDivElement>(null);
-  // One scale for all three lanes, so bar heights compare across hotels.
-  const top = Math.max(plan.capacity.ruya, plan.capacity.araf, plan.totals.byHotel.ruya.peak, plan.totals.byHotel.araf.peak, 1);
-  const unit = 96 / top;
-  const PAD = 40; // room for the number above the bar and the gap below it
-  const laneMax: Record<HotelId, number> = {
-    ruya: Math.max(plan.capacity.ruya, plan.totals.byHotel.ruya.peak),
-    araf: Math.max(plan.capacity.araf, plan.totals.byHotel.araf.peak),
-    c: Math.max(30, Math.min(plan.totals.byHotel.c.peak, top * 1.6)),
-  };
-  const laneHeight = (h: HotelId) => Math.round(laneMax[h] * unit) + PAD;
-  const capOf = (h: HotelId) => (h === 'ruya' ? plan.capacity.ruya : h === 'araf' ? plan.capacity.araf : null);
-  const lanes = { '--lane-ruya': `${laneHeight('ruya')}px`, '--lane-araf': `${laneHeight('araf')}px`, '--lane-c': `${laneHeight('c')}px` } as CSSProperties;
-
-  useEffect(() => {
-    const el = scroller.current?.querySelector<HTMLElement>(`[data-date="${date}"]`);
-    el?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
-  }, [date]);
-
-  const sum = (ids: string[]) => ids.reduce((total, id) => total + (byId.get(id)?.pax ?? 0), 0);
-
-  return (
-    <div className="ledger" style={lanes}>
-      <div className="ledger-labels">
-        <div className="ledger-head-space" />
-        {HOTEL_ORDER.map((h) => (
-          <div key={h} className={`lane-label lane-${h}`} data-hotel={h}>
-            {capOf(h) ? (
-              <span className="cap-tick" style={{ bottom: 10 + Math.round((capOf(h) as number) * unit) }}>
-                {capOf(h)}
-              </span>
-            ) : null}
-            <b>{HOTEL_NAME[h]}</b>
-            <span>{h === 'ruya' ? `${plan.capacity.ruya} beds` : h === 'araf' ? `${plan.capacity.araf} beds` : 'no limit'}</span>
+      {t.groups ? (
+        <>
+          <div className="tile-big">
+            <Num value={t.guests} />
+            <small>{t.guests === 1 ? 'guest' : 'guests'}</small>
           </div>
-        ))}
-        <div className="moves-label">
-          In
-          <br />
-          Out
-        </div>
-      </div>
-      <div className="ledger-scroll" ref={scroller}>
-        <div className="ledger-track" role="tablist" aria-label="Nights">
-          {plan.days.map((day, i) => {
-            const weekday = new Date(`${day.date}T00:00:00Z`).getUTCDay();
-            const monthStart = i === 0 || day.date.endsWith('-01');
-            const arriving = sum(day.arrivals);
-            const leaving = sum(day.departures);
-            return (
-              <button
-                key={day.date}
-                role="tab"
-                className="col"
-                data-date={day.date}
-                data-weekend={weekday === 5}
-                data-month-start={monthStart && i > 0}
-                aria-selected={day.date === date}
-                aria-label={`${weekdayLong(day.date)} ${fullDate(day.date)}: Ruya ${day.hotels.ruya.pax}, Araf ${day.hotels.araf.pax}, Hotel C ${day.hotels.c.pax}`}
-                onClick={() => onDate(day.date)}
-                style={{ '--i': Math.min(i, 60) } as CSSProperties}
-              >
-                <div className="col-head">
-                  <span className="col-month">{monthStart ? monthShort(day.date) : ''}</span>
-                  <span>{weekdayShort(day.date)}</span>
-                  <b>{dayNumber(day.date)}</b>
-                </div>
-                {HOTEL_ORDER.map((h) => {
-                  const cell = day.hotels[h];
-                  const cap = capOf(h);
-                  const px = cell.pax ? Math.max(4, Math.round(Math.min(cell.pax, laneMax[h]) * unit)) : 0;
-                  const full = cap !== null && cell.pax >= cap;
-                  return (
-                    <div key={h} className={`lane lane-${h}`} data-hotel={h}>
-                      {cap ? <span className="cap-line" style={{ bottom: 10 + Math.round(cap * unit) }} /> : null}
-                      {cell.pax ? (
-                        <>
-                          <span className="bar-n">{cell.pax}</span>
-                          <span className="bar" data-full={full} style={{ height: px }} />
-                        </>
-                      ) : (
-                        <span className="lane-zero" />
-                      )}
-                    </div>
-                  );
-                })}
-                <div className="moves">
-                  <span className="in">{arriving ? `+${arriving}` : '·'}</span>
-                  <span className="out">{leaving ? `−${leaving}` : '·'}</span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+          <div className="tile-sub">
+            {groupsText(t.groups)} · {nightsUsed} of {plan.days.length} nights · busiest night {t.peak}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="tile-big none">Not needed</div>
+          <div className="tile-sub">{hotel === 'ruya' ? 'No groups in Ruya' : 'Ruya covers every group'}</div>
+        </>
+      )}
     </div>
   );
 }
 
-function StayItem({ group, placement, date, active, onHover }: { group: Group; placement: Placement; date: string; active: boolean; onHover: (id: string | null) => void }) {
-  const last = placement.nights[placement.nights.length - 1];
-  const left = daysBetween(date, group.checkOut);
-  return (
-    <li className="stay" data-active={active} onMouseEnter={() => onHover(group.id)} onMouseLeave={() => onHover(null)}>
-      <span className="stay-tour">{group.tourNo}</span>
-      <span className="stay-who" title={group.leader}>
-        {group.leader}
-      </span>
-      <span className="stay-pax">{group.pax}</span>
-      <div className="stay-line">
-        <span>{rangeLabel(group.checkIn, group.checkOut)}</span>
-        {group.checkIn === date ? <span className="tag teal">arrives today</span> : null}
-        {date === last ? (
-          <span className="tag">{placement.staysDepartureDay ? 'flies out today' : 'last night'}</span>
-        ) : left > 0 ? (
-          <span>· leaves in {left} {left === 1 ? 'day' : 'days'}</span>
-        ) : null}
-        {placement.staysDepartureDay && date !== last ? <span className="tag gold">+ departure day</span> : null}
-        {placement.hotel !== 'ruya' || placement.overbooked ? (
-          <span className={`tag ${placement.hotel === 'c' ? 'rose' : 'gold'}`} title={placement.detail}>
-            {placement.overbooked ? 'Does not fit' : SHORT_REASON[placement.reason]}
-          </span>
-        ) : null}
-      </div>
-    </li>
-  );
-}
+// ---- one night, opened from the daily table --------------------------------------
 
-function RoomBoard({ plan, day, byId, hot, onHover }: { plan: Plan; day: DayRow; byId: Map<string, Group>; hot: string | null; onHover: (id: string | null) => void }) {
-  const occupant = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const id of day.hotels.ruya.groups) for (const room of plan.placements[id]?.rooms ?? []) map.set(room.id, id);
-    return map;
-  }, [plan, day]);
-  const sizes = useMemo(() => [...new Set(plan.rooms.map((r) => r.beds))].sort((a, b) => a - b), [plan.rooms]);
-  const free = plan.rooms.length - occupant.size;
+function NightDetail({ day, plan, byId }: { day: DayRow; plan: Plan; byId: Map<string, Group> }) {
+  const holdLabel = new Map(OPENING_BALANCE.map((h) => [h.id, h.label]));
+  const occupant = new Map<string, string>();
+  for (const id of day.hotels.ruya.groups) for (const room of plan.placements[id]?.rooms ?? []) occupant.set(room.label, id);
+  const inPlan = new Set(plan.rooms.map((r) => r.label));
+  const floors = [...new Set(RUYA_SHEET.map((r) => r.floor))];
+  const name = (id: string) => (byId.get(id) ? `Tour ${byId.get(id)?.tourNo}` : (holdLabel.get(id) ?? id));
+  const paxOf = (id: string) => byId.get(id)?.pax ?? OPENING_BALANCE.find((h) => h.id === id)?.pax ?? 0;
+
   return (
-    <div className="board">
-      <div className="board-title">
-        <b>Rooms tonight</b>
-        <span>
-          {occupant.size} in use · {free} free
-        </span>
-      </div>
-      {sizes.map((beds) => (
-        <div className="board-size" key={beds}>
-          <span>{beds}-bed</span>
-          <div className="board-rooms">
-            {plan.rooms
-              .filter((r) => r.beds === beds)
-              .map((room) => {
-                const id = occupant.get(room.id);
-                const group = id ? byId.get(id) : undefined;
-                const colour = id ? tint(id) : null;
+    <div className="night-detail">
+      <div className="nd-ruya">
+        <div className="nd-title" data-hotel="ruya">
+          <b>Ruya rooms</b>
+          <span>
+            {occupant.size} of {plan.rooms.length} rooms in use · {plan.capacity.ruya - day.hotels.ruya.beds} beds free
+          </span>
+        </div>
+        {floors.map((floor) => (
+          <div className="nd-floor" key={floor}>
+            <span className="nd-floor-name">Floor {floor}</span>
+            <div className="nd-rooms">
+              {RUYA_SHEET.filter((r) => r.floor === floor).map((room) => {
+                const id = occupant.get(room.no);
+                const held = id ? holdLabel.has(id) : false;
+                const colour = id && !held ? tint(id) : held ? { background: 'var(--sunk)', ink: 'var(--ink-2)' } : null;
+                const out = !inPlan.has(room.no);
                 return (
                   <span
-                    key={room.id}
-                    className="room"
+                    key={room.no}
+                    className="nd-room"
                     data-taken={Boolean(id)}
-                    data-hot={Boolean(id) && hot === id}
-                    data-dim={hot !== null && hot !== id}
+                    data-out={out}
                     style={colour ? ({ '--tint': colour.background, '--tint-ink': colour.ink } as CSSProperties) : undefined}
-                    title={group ? `Room ${room.label}: tour ${group.tourNo}, ${group.leader}, ${guests(group.pax)}` : `Room ${room.label}: free`}
-                    onMouseEnter={() => onHover(id ?? null)}
-                    onMouseLeave={() => onHover(null)}
+                    title={out ? `Room ${room.no}: not in the plan` : id ? `Room ${room.no}: ${name(id)}` : `Room ${room.no}: free`}
                   >
-                    <b>{group ? group.tourNo : 'free'}</b>
-                    {room.label}
+                    <b>{room.no}</b>
+                    <span>{out ? 'not ours' : id ? (byId.get(id)?.tourNo ?? 'Nov') : `${room.beds} beds`}</span>
                   </span>
                 );
               })}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
+      <div className="nd-lists">
+        {HOTEL_ORDER.map((hotel) => {
+          const ids = day.hotels[hotel].groups;
+          return (
+            <div key={hotel} className="nd-list" data-hotel={hotel}>
+              <div className="nd-title" data-hotel={hotel}>
+                <b>{HOTEL_NAME[hotel]}</b>
+                <span>{guests(day.hotels[hotel].pax)}</span>
+              </div>
+              {ids.length ? (
+                <ul>
+                  {ids.map((id) => {
+                    const g = byId.get(id);
+                    const p = plan.placements[id];
+                    return (
+                      <li key={id}>
+                        <span className="nd-tour">{g?.tourNo ?? 'Nov'}</span>
+                        <span className="nd-who">{g?.leader || holdLabel.get(id) || ''}</span>
+                        <span className="nd-pax">{paxOf(id)}</span>
+                        {hotel === 'ruya' && p?.rooms.length ? <span className="nd-roomlist">{p.rooms.map((r) => r.label).join(', ')}</span> : null}
+                        {hotel !== 'ruya' && p ? <span className="nd-why">{p.overbooked ? 'Does not fit' : SHORT[p.reason]}</span> : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="nd-empty">Nobody</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-export function PlanView({ groups, plan, date, onDate, onOpenSettings, onOpenGroups }: Props) {
+// ---- daily plan ---------------------------------------------------------------
+
+function DailyTable({ plan, byId }: { plan: Plan; byId: Map<string, Group> }) {
+  const [open, setOpen] = useState<string | null>(null);
+  const tours = (ids: string[]) => ids.map((id) => byId.get(id)?.tourNo).filter(Boolean).join(', ');
+  const pax = (ids: string[]) => ids.reduce((sum, id) => sum + (byId.get(id)?.pax ?? 0), 0);
+  const why = (day: DayRow) => {
+    const reasons = new Map<string, string[]>();
+    for (const hotel of ['araf', 'c'] as const) {
+      for (const id of day.hotels[hotel].groups) {
+        const p = plan.placements[id];
+        const label = p?.overbooked ? 'Does not fit' : (SHORT[p?.reason ?? 'fits'] ?? '');
+        reasons.set(label, [...(reasons.get(label) ?? []), byId.get(id)?.tourNo ?? id]);
+      }
+    }
+    return [...reasons].map(([label, list]) => `${label}: ${list.join(', ')}`);
+  };
+
+  return (
+    <div className="sheet-wrap">
+      <table className="sheet daily">
+        <thead>
+          <tr>
+            <th scope="col">Date</th>
+            <th scope="col" className="n" data-hotel="ruya">
+              Ruya <small>of {plan.capacity.ruya}</small>
+            </th>
+            <th scope="col" className="n" data-hotel="araf">
+              Araf <small>of {plan.capacity.araf}</small>
+            </th>
+            <th scope="col" className="n" data-hotel="c">
+              Hotel C
+            </th>
+            <th scope="col" className="n">
+              All guests
+            </th>
+            <th scope="col" className="n">
+              Ruya beds free
+            </th>
+            <th scope="col">Arriving</th>
+            <th scope="col">Leaving</th>
+            <th scope="col">Why Araf or Hotel C</th>
+          </tr>
+        </thead>
+        <tbody>
+          {plan.days.map((day) => {
+            const ruyaUsed = plan.rooms.length ? day.hotels.ruya.beds : day.hotels.ruya.pax;
+            const free = plan.capacity.ruya - ruyaUsed;
+            const isOpen = open === day.date;
+            const reasons = why(day);
+            return (
+              <Fragment key={day.date}>
+                <tr
+                  className="day-row"
+                  data-open={isOpen}
+                  data-weekend={new Date(`${day.date}T00:00:00Z`).getUTCDay() === 5}
+                  data-month={day.date.endsWith('-01') && day.date !== plan.days[0].date}
+                  tabIndex={0}
+                  aria-expanded={isOpen}
+                  onClick={() => setOpen(isOpen ? null : day.date)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setOpen(isOpen ? null : day.date);
+                    }
+                  }}
+                >
+                  <th scope="row" className="date">
+                    <span className="caret" aria-hidden="true" />
+                    {dayLabel(day.date)}
+                  </th>
+                  <td className="n cell-ruya" data-on={day.hotels.ruya.pax > 0}>
+                    <span className="fill" style={{ width: `${Math.min(100, (ruyaUsed / Math.max(1, plan.capacity.ruya)) * 100)}%` }} />
+                    <span className="v">{day.hotels.ruya.pax || '–'}</span>
+                  </td>
+                  <td className="n cell-araf" data-on={day.hotels.araf.pax > 0}>
+                    {day.hotels.araf.pax || '–'}
+                  </td>
+                  <td className="n cell-c" data-on={day.hotels.c.pax > 0}>
+                    {day.hotels.c.pax || '–'}
+                  </td>
+                  <td className="n total">{day.total || '–'}</td>
+                  <td className="n" data-low={free <= 0}>
+                    {free}
+                  </td>
+                  <td className="moves">{day.arrivals.length ? <>+{pax(day.arrivals)} <span>({tours(day.arrivals)})</span></> : ''}</td>
+                  <td className="moves">{day.departures.length ? <>−{pax(day.departures)} <span>({tours(day.departures)})</span></> : ''}</td>
+                  <td className="why">{reasons.join(' · ')}</td>
+                </tr>
+                {isOpen ? (
+                  <tr className="detail-row">
+                    <td colSpan={9}>
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        transition={{ duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
+                        style={{ overflow: 'hidden' }}
+                      >
+                        <NightDetail day={day} plan={plan} byId={byId} />
+                      </motion.div>
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ---- bookings ------------------------------------------------------------------
+
+function BookingsTable({ plan, byId }: { plan: Plan; byId: Map<string, Group> }) {
+  const rows = plan.bookings.flatMap((b) =>
+    b.steps.map((step) => ({
+      key: `${b.hotel}-${step.from}`,
+      hotel: b.hotel,
+      ...step,
+      ids: b.groupIds.filter((id) => plan.placements[id]?.nights.some((n) => n >= step.from && n <= step.lastNight)),
+    })),
+  );
+  if (!rows.length) return <div className="all-clear">Ruya covers every night. Nothing to book at Araf or Hotel C.</div>;
+  return (
+    <div className="sheet-wrap">
+      <table className="sheet">
+        <thead>
+          <tr>
+            <th scope="col">Hotel</th>
+            <th scope="col">First night</th>
+            <th scope="col">Last night</th>
+            <th scope="col" className="n">
+              Nights
+            </th>
+            <th scope="col" className="n">
+              Guests
+            </th>
+            <th scope="col">Tours</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.key}>
+              <td>
+                <span className="chip" data-hotel={r.hotel}>
+                  {HOTEL_NAME[r.hotel]}
+                </span>
+              </td>
+              <td>{fullDate(r.from)}</td>
+              <td>{fullDate(r.lastNight)}</td>
+              <td className="n">{nightsBetween(r.from, r.lastNight)}</td>
+              <td className="n strong">{r.pax}</td>
+              <td>{r.ids.map((id) => byId.get(id)?.tourNo).join(', ')}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ---- groups ---------------------------------------------------------------------
+
+function RoomsCell({ group, input, placement, onInput }: { group: Group; input: GroupInput; placement: Placement | undefined; onInput: Props['onInput'] }) {
+  const parsed = parseRoomSpec(input.spec);
+  const typed = Boolean(input.spec?.trim());
+  let read: { text: string; bad: boolean } | null = null;
+  if (parsed.error) read = { text: parsed.error, bad: true };
+  else if (typed) read = { text: `${describeRooms(parsed.rooms)} = ${parsed.beds}`, bad: parsed.beds < group.pax };
+  else if (placement?.specSource === 'suggested' && placement.spec) read = { text: `None asked for. Planned as ${describeRooms(placement.spec)}`, bad: false };
+  return (
+    <div className="rooms-cell" data-bad={read?.bad}>
+      <input
+        type="text"
+        value={input.spec ?? ''}
+        placeholder="e.g. 2x6, 3x1"
+        aria-label={`Rooms tour ${group.tourNo} needs in Ruya`}
+        spellCheck={false}
+        onChange={(e) => onInput(group.tourNo, { spec: e.target.value })}
+      />
+      {read ? <small>{read.text}</small> : null}
+    </div>
+  );
+}
+
+function notesFor(group: Group, placement: Placement | undefined, input: GroupInput): { text: string; warn: boolean }[] {
+  const notes: { text: string; warn: boolean }[] = [];
+  if (placement) {
+    if (placement.overbooked) notes.push({ text: `Does not fit. ${placement.detail}`, warn: true });
+    else if (placement.hotel !== 'ruya' || placement.reason === 'pinned') notes.push({ text: `${REASON_LABEL[placement.reason]}. ${placement.reason === 'pinned' ? '' : placement.detail}`.trim(), warn: placement.hotel !== 'ruya' });
+    if (placement.specIssue) notes.push({ text: placement.specIssue, warn: true });
+    if (placement.staysDepartureDay) notes.push({ text: `Flies ${group.departure.flight ?? 'Iraqi Airways'} from Najaf: departure day counted as a night.`, warn: false });
+  }
+  const m = input.message;
+  if (m && input.spec) {
+    if (m.hotelPax !== null && m.hotelPax !== group.pax) notes.push({ text: `Room request says ${m.hotelPax} guests, NKERP has ${group.pax}.`, warn: true });
+    if (m.from && m.to && (m.from !== group.checkIn || m.to !== group.checkOut)) notes.push({ text: `Room request says ${rangeLabel(m.from, m.to)}.`, warn: true });
+  }
+  if (group.paxNkerpHoused > 0) notes.push({ text: `${group.paxNkerpHoused} more on this tour are housed by NKERP.`, warn: false });
+  for (const note of group.notes) notes.push({ text: note, warn: false });
+  return notes;
+}
+
+function GroupsTable({ list, plan, inputs, onInput, before = false }: { list: Group[]; plan: Plan; inputs: Props['inputs']; onInput: Props['onInput']; before?: boolean }) {
+  return (
+    <div className="sheet-wrap">
+      <table className="sheet groups">
+        <thead>
+          <tr>
+            <th scope="col">Tour</th>
+            <th scope="col">Group leader</th>
+            <th scope="col" className="n">
+              Guests
+            </th>
+            <th scope="col">Arrives</th>
+            <th scope="col">Leaves</th>
+            <th scope="col" className="n">
+              Nights
+            </th>
+            <th scope="col">Hotel</th>
+            {before ? null : <th scope="col">Rooms asked for</th>}
+            {before ? null : <th scope="col">Ruya rooms</th>}
+            <th scope="col">Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {list.map((group) => {
+            const placement = plan.placements[group.id];
+            const input = inputs[group.id] ?? {};
+            const hotel: HotelId | null = placement?.hotel ?? null;
+            const notes = notesFor(group, placement, input);
+            return (
+              <tr key={group.id} data-flag={Boolean(placement && (placement.hotel !== 'ruya' || placement.overbooked))}>
+                <th scope="row" className="tour">
+                  {group.tourNo}
+                </th>
+                <td className="leader">{group.leader || '–'}</td>
+                <td className="n strong">
+                  {group.pax}
+                  {group.infants ? <small> +{group.infants} inf</small> : null}
+                </td>
+                <td>{dayMonth(group.checkIn)}</td>
+                <td>{dayMonth(group.checkOut)}</td>
+                <td className="n">{placement ? placement.nights.length : daysBetween(group.checkIn, group.checkOut)}</td>
+                <td className="hotel-cell" data-hotel={hotel ?? 'none'} data-overbooked={placement?.overbooked}>
+                  <label className="sr" htmlFor={`pin-${group.id}`}>
+                    Hotel for tour {group.tourNo}
+                  </label>
+                  <select
+                    id={`pin-${group.id}`}
+                    value={input.pin ?? ''}
+                    onChange={(e) => onInput(group.tourNo, { pin: (e.target.value || null) as HotelId | null })}
+                  >
+                    <option value="">{hotel ? HOTEL_NAME[hotel] : 'Not planned'}</option>
+                    {HOTEL_ORDER.map((h) => (
+                      <option key={h} value={h}>
+                        Keep in {HOTEL_NAME[h]}
+                      </option>
+                    ))}
+                  </select>
+                </td>
+                {before ? null : (
+                  <td className="rooms">
+                    <RoomsCell group={group} input={input} placement={placement} onInput={onInput} />
+                  </td>
+                )}
+                {before ? null : <td className="room-nos">{placement?.rooms.map((r) => r.label).join(', ') || ''}</td>}
+                <td className="notes">
+                  {before && !placement ? <span className="note">Housed under the November arrangement.</span> : null}
+                  {notes.map((n) => (
+                    <span key={n.text} className="note" data-warn={n.warn}>
+                      {n.text}
+                    </span>
+                  ))}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ---- the page --------------------------------------------------------------------
+
+export function PlanView({ groups, plan, meta, inputs, onInput, onOpenRequests }: Props) {
   const byId = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
-  const [hot, setHot] = useState<string | null>(null);
-  const index = Math.max(0, plan.days.findIndex((d) => d.date === date));
-  const day = plan.days[index];
-  const previous = useRef(index);
-  const direction = index >= previous.current ? 1 : -1;
-  useEffect(() => {
-    previous.current = index;
-  }, [index]);
+  const before = new Set(plan.before);
+  const planned = groups.filter((g) => !before.has(g.id) && g.pax > 0);
+  const early = groups.filter((g) => before.has(g.id));
+  const { totals } = plan;
+  const asked = planned.filter((g) => inputs[g.id]?.spec?.trim()).length;
+  const otherNights = plan.days.filter((d) => d.hotels.araf.pax + d.hotels.c.pax > 0).length;
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target && /INPUT|SELECT|TEXTAREA/.test(target.tagName)) return;
-      if (e.key === 'ArrowLeft' && index > 0) onDate(plan.days[index - 1].date);
-      if (e.key === 'ArrowRight' && index < plan.days.length - 1) onDate(plan.days[index + 1].date);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [index, plan.days, onDate]);
-
-  if (!day || !groups.length) {
+  if (!groups.length) {
     return (
       <main className="page">
         <div className="empty">
-          <h2>Nothing to plan yet</h2>
-          <p>There are no groups in this range. Pull again with an earlier first night, or once more tours are approved in NKERP.</p>
-          <button className="btn" onClick={onOpenGroups}>
-            Back to groups
-          </button>
+          <h2>No groups in this range</h2>
+          <p>No approved tour in this range has guests who need a hotel. Pull again with other dates, or once more tours are approved in NKERP.</p>
         </div>
       </main>
     );
   }
 
-  const sum = (ids: string[]) => ids.reduce((total, id) => total + (byId.get(id)?.pax ?? 0), 0);
-  const tours = (ids: string[]) => ids.map((id) => byId.get(id)?.tourNo ?? '?').join(', ');
-  const { totals } = plan;
-
   return (
     <main className="page">
-      <div className="page-head">
-        <div>
+      <section className="overview">
+        <div className="overview-head">
           <h1>{rangeLabel(plan.range.from, plan.range.to)}</h1>
           <p>
-            {groupsText(totals.groups)}, {guests(totals.guests)}. Ruya takes {groupsText(totals.byHotel.ruya.groups)}
-            {totals.byHotel.araf.groups ? `, Araf ${totals.byHotel.araf.groups}` : ''}
-            {totals.byHotel.c.groups ? `, Hotel C ${totals.byHotel.c.groups}` : ''}.
+            {groupsText(totals.groups)}, {guests(totals.guests)} who need a hotel.{' '}
+            {otherNights ? (
+              <>
+                Ruya is not enough on <b>{nightsText(otherNights)}</b>.
+              </>
+            ) : (
+              'Ruya covers every night.'
+            )}
+          </p>
+          {meta.notApproved ? (
+            <p className="overview-note">
+              {meta.notApproved} more {meta.notApproved === 1 ? 'tour' : 'tours'} in this period {meta.notApproved === 1 ? 'is' : 'are'} still pending in NKERP. They join
+              the plan once approved.
+            </p>
+          ) : null}
+        </div>
+        <div className="tiles">
+          {HOTEL_ORDER.map((hotel) => (
+            <HotelTile key={hotel} hotel={hotel} plan={plan} />
+          ))}
+        </div>
+      </section>
+
+      <section className="block">
+        <div className="block-head">
+          <h2>Daily plan</h2>
+          <p>Guests sleeping in each hotel, night by night. Click a night to see who is in which room.</p>
+        </div>
+        <DailyTable plan={plan} byId={byId} />
+      </section>
+
+      <section className="block">
+        <div className="block-head">
+          <h2>Bookings to make</h2>
+          <p>Every run of nights when Ruya alone is not enough.</p>
+        </div>
+        <BookingsTable plan={plan} byId={byId} />
+      </section>
+
+      <section className="block">
+        <div className="block-head">
+          <h2>Groups</h2>
+          <p>
+            One row per group. {asked} of {planned.length} have their rooms.{' '}
+            <button className="linkish" onClick={onOpenRequests}>
+              Paste room requests
+            </button>{' '}
+            or type them as bed size × rooms (2x6 is six 2-bed rooms).
           </p>
         </div>
-      </div>
-
-      <div className="section-title" style={{ marginTop: 0 }}>
-        <h2>Bookings to make</h2>
-        <p>Every run of nights when Ruya alone is not enough.</p>
-      </div>
-      {plan.bookings.length ? (
-        <div className="bookings">
-          <AnimatePresence>
-            {plan.bookings.map((b) => (
-              <BookingCard key={`${b.hotel}-${b.from}`} booking={b} tours={tours(b.groupIds)} onOpen={() => onDate(b.from)} />
-            ))}
-          </AnimatePresence>
-        </div>
-      ) : (
-        <div className="all-ruya">Ruya covers every night in this range. Nothing to book at Araf or Hotel C.</div>
-      )}
-
-      <div className="section-title">
-        <h2>Night by night</h2>
-        <p>Guests sleeping in each hotel. Pick a night to see who and which rooms.</p>
-      </div>
-      <Ledger plan={plan} date={day.date} onDate={onDate} byId={byId} />
-
-      <section className="day" aria-live="polite">
-        <div className="day-bar">
-          <button className="round" aria-label="Previous night" disabled={index === 0} onClick={() => onDate(plan.days[index - 1].date)}>
-            <Chevron dir="left" size={16} />
-          </button>
-          <h2>
-            {weekdayShort(day.date)} {dayMonth(day.date)}
-          </h2>
-          <button className="round" aria-label="Next night" disabled={index === plan.days.length - 1} onClick={() => onDate(plan.days[index + 1].date)}>
-            <Chevron dir="right" size={16} />
-          </button>
-          <div className="day-moves">
-            <span>
-              <b>{sum(day.arrivals)}</b> arriving{day.arrivals.length ? ` (${tours(day.arrivals)})` : ''}
-            </span>
-            <span>
-              <b>{sum(day.departures)}</b> leaving{day.departures.length ? ` (${tours(day.departures)})` : ''}
-            </span>
-          </div>
-        </div>
-
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={day.date}
-            className="day-cols"
-            initial={{ opacity: 0, x: 28 * direction }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -28 * direction }}
-            transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
-          >
-            {HOTEL_ORDER.map((h) => {
-              const cell = day.hotels[h];
-              const cap = h === 'ruya' ? plan.capacity.ruya : h === 'araf' ? plan.capacity.araf : null;
-              const list = cell.groups.map((id) => byId.get(id)).filter((g): g is Group => Boolean(g));
-              const heldPax = cell.pax - list.reduce((s, g) => s + g.pax, 0);
-              return (
-                <div key={h} className="hotel-card" data-hotel={h}>
-                  <div className="hotel-card-head">
-                    <h3>{HOTEL_NAME[h]}</h3>
-                    <span className="hotel-count">
-                      <b>
-                        <Num value={cell.pax} />
-                      </b>
-                      {cap ? `of ${cap}` : cell.pax === 1 ? 'guest' : 'guests'}
-                    </span>
-                  </div>
-                  {cap ? (
-                    <div className="meter">
-                      <i style={{ width: `${Math.min(100, (cell.pax / cap) * 100)}%` }} />
-                    </div>
-                  ) : null}
-                  {cap ? (
-                    <div className="hotel-note">
-                      {cell.pax > cap
-                        ? `Over by ${cell.pax - cap}`
-                        : h === 'ruya' && plan.rooms.length
-                          ? `${cap - cell.beds} beds free${cell.beds > cell.pax ? ` · ${cell.beds - cell.pax} blocked but empty` : ''}`
-                          : `${cap - cell.pax} beds free`}
-                    </div>
-                  ) : (
-                    <div className="hotel-note">{cell.pax ? 'Needs booking for tonight' : 'Not needed tonight'}</div>
-                  )}
-                  {list.length ? (
-                    <ul className="stays">
-                      {list.map((g) => (
-                        <StayItem key={g.id} group={g} placement={plan.placements[g.id]} date={day.date} active={hot === g.id} onHover={setHot} />
-                      ))}
-                    </ul>
-                  ) : (
-                    <div className="nobody">Nobody here tonight</div>
-                  )}
-                  {heldPax > 0 ? <div className="hotel-note">Plus {guests(heldPax)} from the opening balance.</div> : null}
-                  {h === 'ruya' ? (
-                    plan.rooms.length ? (
-                      <RoomBoard plan={plan} day={day} byId={byId} hot={hot} onHover={setHot} />
-                    ) : (
-                      <div className="board-empty">
-                        Room numbers appear here once Ruya’s room list is added.{' '}
-                        <button className="linkish" style={{ color: 'var(--ruya-ink)' }} onClick={onOpenSettings}>
-                          Add the room list
-                        </button>
-                      </div>
-                    )
-                  ) : null}
-                </div>
-              );
-            })}
-          </motion.div>
-        </AnimatePresence>
+        <GroupsTable list={planned} plan={plan} inputs={inputs} onInput={onInput} />
       </section>
+
+      {early.length ? (
+        <section className="block">
+          <div className="block-head">
+            <h2>Already in Najaf before {dayMonth(PLANNING_START)}</h2>
+            <p>
+              Housed under the November arrangement, so they are not placed. Only rooms {OPENING_BALANCE[0]?.roomLabels?.join(', ')} are taken in Ruya
+              on the first night. Choose a hotel to count one of these groups there.
+            </p>
+          </div>
+          <GroupsTable list={early} plan={plan} inputs={inputs} onInput={onInput} before />
+        </section>
+      ) : null}
     </main>
   );
 }

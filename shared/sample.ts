@@ -72,6 +72,8 @@ export async function runSample({
     departure.airline = airlineOf(departure.flight);
     const pax = sizes[Math.floor(random() * sizes.length)];
     const tourNo = String(4100 + i * 7 + Math.floor(random() * 5));
+    const infants = random() < 0.2 ? 1 : 0;
+    const housed = random() < 0.4 ? 4 + Math.floor(random() * 20) : 0;
     groups.push({
       id: `sample-${tourNo}`,
       tourId: 900000 + i,
@@ -81,8 +83,10 @@ export async function runSample({
       office: 'Sample office',
       leader: LEADERS[i % LEADERS.length],
       pax,
-      paxTotal: pax + (random() < 0.25 ? Math.floor(random() * 8) : 0),
-      paxNkerpHoused: 0,
+      infants,
+      paxTotal: pax + infants + housed,
+      paxNkerpHoused: housed,
+      status: 'Approved',
       checkIn,
       checkOut,
       arrivalAt: `${checkIn}T${secondLeg ? '11:00' : '07:30'}:00`,
@@ -92,7 +96,6 @@ export async function runSample({
         : { kind: 'airport', place: random() < 0.6 ? 'Najaf Airport' : 'Baghdad Airport', flight: 'IA 442' },
       departure,
       secondLeg,
-      seenIn: { tourList: true, dashboard: true },
       notes: [],
     });
   }
@@ -107,7 +110,7 @@ export async function runSample({
   const days: string[] = [];
   for (let d = from; d <= through; d = addDays(d, 1)) days.push(d);
   emit('days', { dates: days });
-  step('transport', 'active', `Reading arrivals and departures for ${days.length} days`);
+  step('guests', 'active', `Counting guests on ${kept.length} tours`);
   for (let i = 0; i < days.length; i += 1) {
     await wait(45);
     emit('day', {
@@ -118,8 +121,8 @@ export async function runSample({
       leaving: kept.filter((g) => g.checkOut === days[i]).reduce((s, g) => s + g.pax, 0),
     });
   }
-  step('transport', 'done', `Arrivals and departures read for ${days.length} days`);
-  step('match', 'active', 'Matching tours with their flights');
+  step('guests', 'done', `${kept.length} stays with guests who need a hotel`);
+  step('match', 'active', 'Building the stays');
   await wait(300);
   step('match', 'done', `${kept.length} groups ready`);
 
@@ -134,7 +137,8 @@ export async function runSample({
       fetchedAt: new Date().toISOString(),
       approvedStays: kept.length,
       nkerpHousedOnly: 0,
-      daysRead: days.length,
+      notApproved: 0,
+      toursRead: kept.length,
       requests: 0,
       seconds: 0,
     },

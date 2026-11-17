@@ -21,6 +21,10 @@
  *    there, the rooms were not) or "ruya-full" (not enough beds).
  * 7. A person can keep a group in a chosen hotel. That choice is honoured
  *    even when it overbooks the hotel, and is flagged.
+ * 8. The opening balance (who is already in house on the first night) is
+ *    booked first, in its exact Ruya rooms when they are given. Groups that
+ *    reached Najaf before the planning start are covered by it, so they are
+ *    listed but not placed, unless a person keeps them in a hotel by hand.
  */
 import { addDays, dayMonth, eachDate } from './dates';
 import { describeRooms, groupRooms, parseRoomSpec } from './roomSpec';
@@ -56,6 +60,9 @@ export function nightsOf(group: Group, settings: Pick<Settings, 'departureDayRul
   const last = staysDepartureDay(group, settings) ? group.checkOut : addDays(group.checkOut, -1);
   return last < group.checkIn ? [] : eachDate(group.checkIn, last);
 }
+
+/** Rooms in room-number order: 101, 102, … 110, 201. */
+const byLabel = (rooms: Room[]): Room[] => [...rooms].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 
 /** Expands the room list into individual rooms. */
 export function expandRooms(types: Settings['rooms']): Room[] {
@@ -138,6 +145,12 @@ class Ruya {
       if (free < result.free) result = { free, night };
     }
     return result;
+  }
+
+  /** The rooms with these numbers that are free on every night given. */
+  roomsByLabel(labels: readonly string[], nights: string[]): RoomState[] {
+    const wanted = new Set(labels.map((l) => l.trim()));
+    return this.freeRooms(nights).filter((room) => wanted.has(room.label));
   }
 
   /** Picks concrete rooms for a list of bed sizes, or says which size ran short. */
@@ -235,9 +248,14 @@ export interface PlanInput {
   from: string;
   /** Last date shown. Defaults to the last night anyone stays. */
   to?: string | null;
+  /**
+   * First night of the plan. Groups arriving earlier are covered by the
+   * opening balance and are not placed (unless kept in a hotel by hand).
+   */
+  start?: string | null;
 }
 
-export function buildPlan({ groups, inputs, settings, holds = [], from, to }: PlanInput): Plan {
+export function buildPlan({ groups, inputs, settings, holds = [], from, to, start = null }: PlanInput): Plan {
   const ruya = new Ruya(settings);
   const araf = new HeadCount(settings.arafCapacity);
   const placements: Record<string, Placement> = {};
@@ -265,10 +283,15 @@ export function buildPlan({ groups, inputs, settings, holds = [], from, to }: Pl
     const candidate: Candidate = { id: hold.id, pax: hold.pax, nights, order: '' };
     let rooms: Room[] = [];
     if (hold.hotel === 'ruya') {
-      const fit = ruya.tryFit(candidate, hold.rooms?.length ? [...hold.rooms].sort((a, b) => b - a) : null);
-      const state = fit.ok ? fit.rooms : [];
+      let state: RoomState[];
+      if (hold.roomLabels?.length && ruya.byRooms) {
+        state = ruya.roomsByLabel(hold.roomLabels, nights);
+      } else {
+        const fit = ruya.tryFit(candidate, hold.rooms?.length ? [...hold.rooms].sort((a, b) => b - a) : null);
+        state = fit.ok ? fit.rooms : [];
+      }
       ruya.book(hold.pax, nights, state);
-      rooms = state.map(({ id, beds, label }) => ({ id, beds, label }));
+      rooms = byLabel(state.map(({ id, beds, label }) => ({ id, beds, label })));
     } else if (hold.hotel === 'araf') {
       araf.book(hold.pax, nights);
     }
@@ -283,8 +306,14 @@ export function buildPlan({ groups, inputs, settings, holds = [], from, to }: Pl
   }
 
   // ---- groups --------------------------------------------------------------
+  const before: string[] = [];
   const queue = groups
     .filter((g) => g.pax > 0)
+    .filter((g) => {
+      const early = Boolean(start && g.checkIn < start && !inputs[g.id]?.pin);
+      if (early) before.push(g.id);
+      return !early;
+    })
     .map((group) => {
       const nights = nightsOf(group, settings);
       const input = inputs[group.id] ?? {};
@@ -318,7 +347,7 @@ export function buildPlan({ groups, inputs, settings, holds = [], from, to }: Pl
       specSource: spec ? 'typed' : 'none',
       specIssue,
     };
-    const toRooms = (rooms: RoomState[]): Room[] => rooms.map(({ id, beds, label }) => ({ id, beds, label }));
+    const toRooms = (rooms: RoomState[]): Room[] => byLabel(rooms.map(({ id, beds, label }) => ({ id, beds, label })));
 
     if (!nights.length) {
       placements[group.id] = base(group.id, nights, { ...common, hotel: 'ruya', detail: 'Arrives and leaves the same day: no night to book.' });
@@ -394,13 +423,14 @@ export function buildPlan({ groups, inputs, settings, holds = [], from, to }: Pl
     });
   }
 
-  return summarise({ groups, holds, placements, ruya, settings, from, to });
+  return summarise({ groups, holds, placements, before, ruya, settings, from, to });
 }
 
 function summarise({
   groups,
   holds,
   placements,
+  before,
   ruya,
   settings,
   from,
@@ -409,6 +439,7 @@ function summarise({
   groups: Group[];
   holds: Hold[];
   placements: Record<string, Placement>;
+  before: string[];
   ruya: Ruya;
   settings: Settings;
   from: string;
@@ -443,7 +474,7 @@ function summarise({
     }
   }
   for (const group of groups) {
-    if (group.pax <= 0) continue;
+    if (group.pax <= 0 || !placements[group.id]) continue;
     index.get(group.checkIn)?.arrivals.push(group.id);
     index.get(group.checkOut)?.departures.push(group.id);
   }
@@ -485,12 +516,13 @@ function summarise({
       byHotel[hotel].peak = Math.max(byHotel[hotel].peak, row.hotels[hotel].pax);
     }
   }
-  const real = groups.filter((g) => g.pax > 0);
+  const real = groups.filter((g) => g.pax > 0 && placements[g.id]);
   return {
     range: { from, to: end },
     capacity: { ruya: ruya.capacity, araf: settings.arafCapacity },
     rooms: ruya.rooms.map(({ id, beds, label }) => ({ id, beds, label })),
     placements,
+    before,
     days,
     bookings,
     totals: {

@@ -2,108 +2,65 @@
  * The pull: everything the planner needs from NKERP for one date range.
  *
  *   1. Sign in.
- *   2. Tour list: every approved Najaf stay of the office (all four ziyarat
- *      status lists), which carries the stay dates, ports, flight codes, the
- *      Karbala → Najaf leg and the "accommodation not required" pax.
- *   3. Transport dashboards, day by day (arrivals, departures, sub-venue
- *      transfers, and who is in Najaf on the first day) to confirm each
- *      departure flight and catch a group the lists did not return.
- *   4. Reconcile both views into one list of stays.
+ *   2. Tours: General search → Groups for the office. Every tour with its
+ *      status, ports, flights and sub-venue plans. Only approved tours with a
+ *      Najaf stay in the range go on.
+ *   3. Guests: each of those tours' guest lists, person by person. A guest
+ *      marked "accommodation not required" needs a bed from us, whether or
+ *      not the rest of the tour is housed by NKERP.
+ *   4. Stays: one per Najaf stay with at least one such guest.
  *
- * Progress is reported through `emit` so the loading screen can show it live.
+ * Every call is a read (see client.mjs). Progress is reported through `emit`
+ * so the loading screen can show it live: a window lights for each day once
+ * every tour arriving by that day has been counted.
  */
-import { addDays, collapseReissues, dashboardFact, daysBetween, reconcile, sameOffice, stayFromCensusRow } from './normalize.mjs';
+import { addDays, countGuests, daysBetween, isApprovedTour, sameOffice, staysFromGroupRow, withGuests } from './normalize.mjs';
 
 export const DEFAULT_OFFICE = 'Fayz E Husayni Trust Mumbai';
-const VENUE_IRAQ = 2;
-const SUBVENUE_NAJAF = 3;
-const LOOKBACK_DAYS = 45; // a group that arrived this long before the range can still be in Najaf
+const LOOKBACK_DAYS = 45; // a tour that started this long before the range can still be in Najaf
 const MAX_DAYS = 150;
-const PAGE = 100;
+const PAGE = 200;
+const POOL = 4;
 
-const LISTS = [
-  { key: 'non_scheduled', path: 'api/VisitingPoint/MuwafiqaApprovedTours', flags: [false, true] },
-  { key: 'scheduled', path: 'api/VisitingPoint/getScheduledTours', flags: [false] },
-  { key: 'partial', path: 'api/VisitingPoint/getPartialScheduledTours', flags: [false] },
-  { key: 'released', path: 'api/VisitingPoint/getReleasedTours', flags: [false] },
-];
-
-const rowsOf = (data) => [...(data?.lstMufiquaFinalInZSDTO ?? []), ...(data?.lstMufiquaInZSDTO ?? [])];
-
-async function readList(client, list, flag, { office, arrivalFrom, arrivalTo, signal }) {
+async function readTours(client, { office, arrivalFrom, arrivalTo, signal, onPage }) {
   const rows = [];
-  for (let page = 1; page <= 50; page += 1) {
+  let seen = 0;
+  for (let page = 1; page <= 60; page += 1) {
     const data = await client.read(
-      list.path,
+      'api/tours/GeneralSearchGroups',
       {
-        IsZiyaratRequired: flag,
-        PackageId: null,
-        TOId: client.userId,
-        TOOfficeNameSearch: office,
-        FromDateFromSearch: arrivalFrom,
-        FromDateToSearch: arrivalTo,
-        TourSearchRefNo: null,
-        ZiyaratGroupId: null,
-        clientTimeZoneOffset: -180,
-        currentPage: page,
-        ddlSubVenue: { Value: SUBVENUE_NAJAF, Text: 'NAJAF' },
-        group: client.groupId,
-        itemsPerPage: PAGE,
-        maxSize: PAGE,
         reverse: false,
-        sortBy: 'ModifiedOn',
-        totalItems: PAGE,
-        subVenueSearchId: SUBVENUE_NAJAF,
-        venueSearchId: VENUE_IRAQ,
+        sortBy: 'StartDateTimeZone',
+        itemsPerPage: PAGE,
+        maxSize: 10,
+        currentPage: page,
+        clientTimeZoneOffset: -180,
+        IsPaging: true,
+        OfficeName: office,
+        ArrivalFromSearch: arrivalFrom,
+        ArrivalToSearch: arrivalTo,
       },
       { signal },
     );
-    const chunk = rowsOf(data);
-    rows.push(...chunk);
-    const total = Number(data?.TotalRows) || rows.length;
-    if (!chunk.length || rows.length >= total) break;
+    const chunk = data?.lstGeneralGroupsSearch ?? [];
+    seen += chunk.length;
+    rows.push(...chunk.filter((row) => sameOffice(row?.OfficeName, office)));
+    onPage(rows.length);
+    const total = Number(data?.TotalRows) || seen;
+    if (!chunk.length || seen >= total) break;
   }
   return rows;
 }
 
-const dashboardBody = (date, sortBy) => ({
-  Date: `${date}T00:00:00.000Z`,
-  VenueId: VENUE_IRAQ,
-  SubVenueId: SUBVENUE_NAJAF,
-  TimeZone: null,
-  Timezone: 3,
-  itemsPerPage: 10,
-  maxSize: 10,
-  totalItems: 0,
-  currentPage: 1,
-  reverse: false,
-  IsForRoomAccomDashboard: false,
-  TransportCode: null,
-  EntryPort: null,
-  ExitPort: null,
-  sortBy,
-});
-
-async function readDay(client, date, { office, withStay, signal }) {
-  const mine = (row) => sameOffice(row.OfficeName, office);
-  const [arrivals, departures, transfers, stay] = await Promise.all([
-    client.read('api/vehicle/getArrivals', dashboardBody(date, 'ArrivalTime'), { signal }),
-    client.read('api/vehicle/getDepartures', dashboardBody(date, 'DepartureTime'), { signal }),
-    client.read('api/vehicle/getSubVenueTransfers', dashboardBody(date, 'DepartureTime'), { signal }),
-    withStay ? client.read('api/vehicle/getStayInSubvenuev2', dashboardBody(date, 'ArrivalTime'), { signal }) : null,
-  ]);
-  const facts = [
-    ...(arrivals?.arrivalRequest ?? []).filter(mine).map((r) => dashboardFact('arrival', r)),
-    ...(departures?.departureRequest ?? []).filter(mine).map((r) => dashboardFact('departure', r)),
-    ...(transfers?.SubVenueArrival ?? [])
-      .filter((r) => mine(r) && String(r.SubVenueTo).toUpperCase() === 'NAJAF')
-      .map((r) => dashboardFact('transfer-in', r)),
-    ...(transfers?.SubVenueDeparture ?? [])
-      .filter((r) => mine(r) && String(r.SubVenueFrom).toUpperCase() === 'NAJAF')
-      .map((r) => dashboardFact('transfer-out', r)),
-    ...(stay?.StayInsubvenueRequest ?? []).filter(mine).map((r) => dashboardFact('stay', r)),
-  ].map((fact) => ({ ...fact, queried: date, date: fact.date ?? date }));
-  return facts;
+async function readGuests(client, tourId, signal) {
+  const path = `api/tours/getApplicants/${Number(tourId)}`;
+  try {
+    return (await client.read(path, undefined, { signal }))?.Applicants ?? [];
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    // One more try: NKERP drops the odd request under load.
+    return (await client.read(path, undefined, { signal }))?.Applicants ?? [];
+  }
 }
 
 /** Runs `worker` over `items` with a small pool so NKERP is not flooded. */
@@ -123,81 +80,98 @@ export async function runSync({ client, from, to: toInput = null, office = DEFAU
   const to = toInput || null;
   const started = Date.now();
   const step = (id, status, detail) => emit('step', { id, status, detail });
+  const inRange = (stay) => stay.checkOut >= from && (!to || stay.checkIn <= to);
 
   step('signin', 'active', 'Signing in to NKERP');
   await client.login({ signal });
   step('signin', 'done', 'Signed in');
 
-  // ---- tour list ---------------------------------------------------------
-  step('tours', 'active', 'Reading approved Najaf tours');
-  const arrivalFrom = addDays(from, -LOOKBACK_DAYS);
-  const raw = new Map();
-  for (const list of LISTS) {
-    for (const flag of list.flags) {
-      const rows = await readList(client, list, flag, { office, arrivalFrom, arrivalTo: to, signal });
-      for (const row of rows) {
-        if (!sameOffice(row?.Tour?.OfficeName, office)) continue;
-        raw.set(`${row.TourId}:${row.TourSubVenuePlanId ?? row.Id}`, row);
-      }
-      step('tours', 'active', `Reading approved Najaf tours (${raw.size} found)`);
+  // ---- tours ---------------------------------------------------------------
+  step('tours', 'active', 'Reading the office’s tours');
+  const rows = await readTours(client, {
+    office,
+    arrivalFrom: addDays(from, -LOOKBACK_DAYS),
+    arrivalTo: to ?? addDays(from, MAX_DAYS),
+    signal,
+    onPage: (n) => step('tours', 'active', `Reading the office’s tours (${n} found)`),
+  });
+  const byTour = new Map();
+  let notApproved = 0;
+  const horizon = to ?? addDays(from, MAX_DAYS);
+  for (const row of rows) {
+    const stays = staysFromGroupRow(row).filter(inRange);
+    if (!isApprovedTour(row)) {
+      // Pending tours have no Najaf dates yet: count them by trip dates so the plan can say they are missing.
+      const start = String(row?.StartDate ?? '').slice(0, 10);
+      const live = row?.IsActive !== false && !/DELETED|REJECTED|CANCEL/i.test(String(row?.Status));
+      if (stays.length || (live && start >= from && start <= horizon)) notApproved += 1;
+      continue;
     }
+    if (stays.length) byTour.set(row.TourId, stays);
   }
-  const approved = [...raw.values()].map(stayFromCensusRow).filter(Boolean);
-  const inRange = collapseReissues(approved).filter((s) => s.checkOut >= from && (!to || s.checkIn <= to));
-  const selfHoused = inRange.filter((s) => s.pax > 0);
-  step('tours', 'done', `${inRange.length} approved stays, ${selfHoused.length} arranging their own hotel`);
-  emit('tours', {
-    approved: inRange.length,
-    selfHoused: selfHoused.length,
-    guests: selfHoused.reduce((sum, s) => sum + s.pax, 0),
-  });
+  const tours = [...byTour.entries()]
+    .map(([tourId, stays]) => ({ tourId, stays, first: stays.reduce((min, s) => (s.checkIn < min ? s.checkIn : min), stays[0].checkIn) }))
+    .sort((a, b) => a.first.localeCompare(b.first));
+  const approvedStays = tours.reduce((sum, t) => sum + t.stays.length, 0);
+  step('tours', 'done', `${tours.length} approved tours staying in Najaf${notApproved ? `, ${notApproved} not approved yet` : ''}`);
 
-  // ---- transport dashboards ---------------------------------------------
-  const lastOut = selfHoused.reduce((max, s) => (s.checkOut > max ? s.checkOut : max), from);
-  let sweepTo = to ?? lastOut;
-  if (daysBetween(from, sweepTo) > MAX_DAYS) sweepTo = addDays(from, MAX_DAYS);
+  // ---- the days the loading screen shows -----------------------------------
+  const lastOut = tours.flatMap((t) => t.stays).reduce((max, s) => (s.checkOut > max ? s.checkOut : max), from);
+  let end = to ?? lastOut;
+  if (daysBetween(from, end) > MAX_DAYS) end = addDays(from, MAX_DAYS);
   const days = [];
-  for (let d = from; d <= sweepTo; d = addDays(d, 1)) days.push(d);
+  for (let d = from; d <= end; d = addDays(d, 1)) days.push(d);
   emit('days', { dates: days });
-  step('transport', 'active', `Reading arrivals and departures for ${days.length} days`);
 
-  const facts = [];
-  let read = 0;
-  await pool(days, 4, async (date, index) => {
-    const dayFacts = await readDay(client, date, { office, withStay: index === 0, signal });
-    facts.push(...dayFacts);
-    read += 1;
-    const guests = (kinds) => dayFacts.filter((f) => kinds.includes(f.kind) && f.pax > 0).reduce((sum, f) => sum + f.pax, 0);
-    emit('day', {
-      date,
-      read,
-      total: days.length,
-      arriving: guests(['arrival', 'transfer-in']),
-      leaving: guests(['departure', 'transfer-out']),
-    });
+  // ---- guests, tour by tour ------------------------------------------------
+  step('guests', 'active', `Counting guests on ${tours.length} tours`);
+  const done = new Set();
+  const counted = [];
+  let lit = 0;
+  const light = (through) => {
+    while (lit < days.length && days[lit] <= through) {
+      const date = days[lit];
+      const sum = (field) => counted.filter((s) => s[field] === date).reduce((n, s) => n + s.pax, 0);
+      lit += 1;
+      emit('day', { date, read: lit, total: days.length, arriving: sum('checkIn'), leaving: sum('checkOut') });
+    }
+  };
+  await pool(tours, POOL, async (tour) => {
+    const counts = countGuests(await readGuests(client, tour.tourId, signal));
+    for (const stay of tour.stays) counted.push(withGuests(stay, counts));
+    done.add(tour.tourId);
+    const selfHoused = counted.filter((s) => s.pax > 0);
+    emit('tours', { approved: approvedStays, selfHoused: selfHoused.length, guests: selfHoused.reduce((n, s) => n + s.pax, 0) });
+    step('guests', 'active', `Counting guests (${done.size} of ${tours.length} tours)`);
+    // Every tour arriving before the earliest unfinished one is counted, so those days are complete.
+    const waiting = tours.find((t) => !done.has(t.tourId));
+    light(waiting ? addDays(waiting.first, -1) : end);
   });
-  step('transport', 'done', `Arrivals and departures read for ${days.length} days`);
+  light(end);
+  const groups = counted
+    .filter((s) => s.pax > 0)
+    .sort((a, b) => a.checkIn.localeCompare(b.checkIn) || (a.arrivalAt ?? '').localeCompare(b.arrivalAt ?? '') || a.tourNo.localeCompare(b.tourNo, undefined, { numeric: true }));
+  const mixed = groups.filter((s) => s.paxNkerpHoused > 0).length;
+  step('guests', 'done', `${groups.length} stays with guests who need a hotel${mixed ? ` (${mixed} of them part-housed by NKERP)` : ''}`);
 
-  // ---- reconcile ---------------------------------------------------------
-  step('match', 'active', 'Matching tours with their flights');
-  const stays = reconcile(selfHoused, facts, { from })
-    .filter((s) => s.pax > 0 && s.checkOut >= from && (!to || s.checkIn <= to))
-    .sort((a, b) => a.checkIn.localeCompare(b.checkIn) || (a.arrivalAt ?? '').localeCompare(b.arrivalAt ?? '') || a.tourNo.localeCompare(b.tourNo));
-  const iraqi = stays.filter((s) => s.departure.airline === 'IA').length;
-  step('match', 'done', `${stays.length} groups ready, ${iraqi} leaving on Iraqi Airways`);
+  // ---- stays ---------------------------------------------------------------
+  step('match', 'active', 'Building the stays');
+  const iraqi = groups.filter((s) => s.departure.airline === 'IA').length;
+  step('match', 'done', `${groups.length} groups ready, ${iraqi} leaving on Iraqi Airways`);
 
   return {
-    groups: stays,
+    groups,
     meta: {
       source: 'nkerp',
       office,
       from,
       to,
-      through: stays.reduce((max, s) => (s.checkOut > max ? s.checkOut : max), sweepTo),
+      through: groups.reduce((max, s) => (s.checkOut > max ? s.checkOut : max), end),
       fetchedAt: new Date().toISOString(),
-      approvedStays: inRange.length,
-      nkerpHousedOnly: inRange.length - selfHoused.length,
-      daysRead: days.length,
+      approvedStays,
+      nkerpHousedOnly: counted.filter((s) => s.pax === 0).length,
+      notApproved,
+      toursRead: tours.length,
       requests: client.requests,
       seconds: Math.round((Date.now() - started) / 100) / 10,
     },
