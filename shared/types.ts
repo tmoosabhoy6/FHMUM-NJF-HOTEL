@@ -80,7 +80,11 @@ export interface Settings {
   rooms: RoomType[];
   /** Count the departure day as a night for second-leg groups flying Iraqi Airways out of Najaf. */
   departureDayRule: boolean;
+  /** Display names of the three hotels (the plan's first, second and overflow hotel). */
+  names?: HotelNames;
 }
+
+export type HotelNames = Record<HotelId, string>;
 
 /** One Ruya room as listed on the hotel's sheet. */
 export interface RuyaRoom {

@@ -2,6 +2,8 @@ import { motion } from 'motion/react';
 import { useEffect } from 'react';
 import { OPENING_BALANCE, RUYA_SHEET, RUYA_WITHHELD } from '../../shared/config';
 import { dayMonth } from '../../shared/dates';
+import { DEFAULT_HOTEL_NAMES, HOTEL_ORDER, hotelNames } from '../../shared/engine';
+import type { HotelNames } from '../../shared/types';
 
 /** What a person can change, saved on this device. */
 export interface Prefs {
@@ -9,6 +11,8 @@ export interface Prefs {
   departureDayRule: boolean;
   /** Ruya room numbers left out of the plan. */
   withheld: string[];
+  /** The hotels' names as shown everywhere (blank = the default name). */
+  names?: Partial<HotelNames>;
 }
 
 interface Props {
@@ -37,6 +41,8 @@ export function SettingsDrawer({ prefs, beds, onChange, onClose, onClearInputs, 
     onChange({ ...prefs, withheld: out.has(no) ? prefs.withheld.filter((n) => n !== no) : [...prefs.withheld, no].sort() });
   const whole = (value: string, min: number, max: number) => Math.min(max, Math.max(min, Math.round(Number(value) || 0)));
   const isDefault = [...prefs.withheld].sort().join() === [...RUYA_WITHHELD].sort().join();
+  const names = hotelNames(prefs.names);
+  const ROLE = { ruya: 'Filled first, room by room', araf: 'Used when the first hotel cannot take a group', c: 'Takes everyone else, no limit' } as const;
 
   return (
     <>
@@ -59,7 +65,30 @@ export function SettingsDrawer({ prefs, beds, onChange, onClose, onClearInputs, 
         </div>
         <div className="drawer-body">
           <section className="set">
-            <h3>Ruya</h3>
+            <h3>Hotel names</h3>
+            <p>Shown everywhere in the plan and in the Excel file. Leave a name empty to go back to the original.</p>
+            <div className="names">
+              {HOTEL_ORDER.map((id) => (
+                <label key={id} className="name-row" data-hotel={id}>
+                  <i aria-hidden="true" />
+                  <span>
+                    <input
+                      type="text"
+                      value={prefs.names?.[id] ?? ''}
+                      placeholder={DEFAULT_HOTEL_NAMES[id]}
+                      maxLength={40}
+                      aria-label={`Name of the hotel that is ${ROLE[id].toLowerCase()}`}
+                      onChange={(e) => onChange({ ...prefs, names: { ...prefs.names, [id]: e.target.value } })}
+                    />
+                    <small>{ROLE[id]}</small>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </section>
+
+          <section className="set">
+            <h3>{names.ruya}</h3>
             <p>
               {rooms} rooms, <b>{beds} beds</b> in the plan. Tap a room to leave it out of the plan or put it back.
             </p>
@@ -96,18 +125,20 @@ export function SettingsDrawer({ prefs, beds, onChange, onClose, onClearInputs, 
           </section>
 
           <section className="set">
-            <h3>Araf</h3>
+            <h3>{names.araf}</h3>
             <div className="set-grid">
               <label>
                 Beds
                 <input type="number" min={0} value={prefs.arafCapacity} onChange={(e) => onChange({ ...prefs, arafCapacity: whole(e.target.value, 0, 2000) })} />
               </label>
             </div>
-            <p>Used when Ruya cannot take a group. Hotel C takes everyone else and has no limit.</p>
+            <p>
+              Used when {names.ruya} cannot take a group. {names.c} takes everyone else and has no limit.
+            </p>
           </section>
 
           <section className="set">
-            <h3>Already in Ruya on the first night</h3>
+            <h3>Already in {names.ruya} on the first night</h3>
             {OPENING_BALANCE.map((hold) => (
               <p key={hold.id}>
                 Rooms {hold.roomLabels?.join(', ')} are taken until {dayMonth(hold.to)} ({hold.pax} beds).
@@ -121,7 +152,7 @@ export function SettingsDrawer({ prefs, beds, onChange, onClose, onClearInputs, 
               <input type="checkbox" checked={prefs.departureDayRule} onChange={(e) => onChange({ ...prefs, departureDayRule: e.target.checked })} />
               <span>
                 Count the departure day as a night when Najaf is the second half of the trip and the group flies Iraqi Airways from
-                Najaf Airport.
+                Najaf Airport or Baghdad Airport.
               </span>
             </label>
           </section>

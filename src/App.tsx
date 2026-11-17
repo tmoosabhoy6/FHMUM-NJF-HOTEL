@@ -2,13 +2,14 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { OPENING_BALANCE, PLANNING_START, RUYA_WITHHELD, ruyaRooms } from '../shared/config';
 import { dayMonth, fullDate } from '../shared/dates';
-import { buildPlan } from '../shared/engine';
+import { buildPlan, hotelNames } from '../shared/engine';
 import type { Group, GroupInput, PullMeta, Settings } from '../shared/types';
 import { RoomRequests } from './components/RoomRequests';
 import { SettingsDrawer, type Prefs } from './components/SettingsDrawer';
 import { Brand } from './components/ui';
 import { exportPlan } from './lib/export';
 import { inputKey } from './lib/inputs';
+import { NamesContext } from './lib/names';
 import { load, remove, save } from './lib/storage';
 import { checkServer, emptyProgress, startPull, type PullProgress, type ServerState } from './lib/sync';
 import { Night } from './screens/Night';
@@ -68,6 +69,7 @@ export function App() {
       ruyaCapacity: rooms.reduce((sum, r) => sum + r.beds * r.count, 0),
       arafCapacity: prefs.arafCapacity,
       departureDayRule: prefs.departureDayRule,
+      names: hotelNames(prefs.names),
     };
   }, [prefs]);
 
@@ -137,11 +139,12 @@ export function App() {
     });
   }, []);
 
+  const names = settings.names ?? hotelNames();
   const night = screen !== 'app';
   const flagged = plan?.totals.flagged ?? 0;
 
   return (
-    <>
+    <NamesContext.Provider value={names}>
       {dataset && plan ? (
         <div className="app" aria-hidden={night}>
           <header className="app-top">
@@ -181,7 +184,7 @@ export function App() {
                   onClick={async () => {
                     setExporting(true);
                     try {
-                      await exportPlan(plan, groups, dataset.meta);
+                      await exportPlan(plan, groups, dataset.meta, names);
                     } finally {
                       setExporting(false);
                     }
@@ -221,7 +224,7 @@ export function App() {
             <PlanView groups={groups} plan={plan} meta={dataset.meta} inputs={inputs} onInput={onInput} onOpenRequests={() => setPanel('requests')} />
           </motion.div>
           <span className="sr" aria-live="polite">
-            {flagged ? `${flagged} groups are not in Ruya.` : 'Every group is in Ruya.'}
+            {flagged ? `${flagged} groups are not in ${names.ruya}.` : `Every group is in ${names.ruya}.`}
           </span>
         </div>
       ) : null}
@@ -269,6 +272,6 @@ export function App() {
           />
         ) : null}
       </AnimatePresence>
-    </>
+    </NamesContext.Provider>
   );
 }

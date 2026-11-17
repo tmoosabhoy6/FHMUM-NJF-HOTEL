@@ -61,7 +61,6 @@ export function airlineOf(flight) {
 }
 
 export const isIraqiAirways = (flight) => airlineOf(flight) === 'IA' || airlineOf(flight) === 'IAW';
-export const isNajafAirport = (port) => /NAJAF/.test(upper(port)) && /AIR/.test(upper(port));
 
 export const isApprovedTour = (row) => row?.IsActive !== false && APPROVED_STATUSES.has(upper(row?.Status));
 

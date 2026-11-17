@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { OPENING_BALANCE, RUYA_SHEET } from '../../shared/config';
 import { dayMonth, rangeLabel } from '../../shared/dates';
 import type { Group, Placement, Plan } from '../../shared/types';
+import { useNames } from '../lib/names';
 
 interface Props {
   group: Group;
@@ -18,6 +19,7 @@ type Busy = { who: string; fixed: boolean; from: string; to: string };
 
 /** Choose a group's exact Ruya rooms. Rooms held by hand or from November cannot be taken; rooms the planner gave someone else can. */
 export function RoomPicker({ group, plan, groups, current, onSave, onClose }: Props) {
+  const names = useNames();
   const placement: Placement | undefined = plan.placements[group.id];
   const nights = placement?.nights ?? [];
   const [picked, setPicked] = useState<string[]>(() => current ?? (placement?.hotel === 'ruya' ? placement.rooms.map((r) => r.label) : []));
@@ -62,7 +64,7 @@ export function RoomPicker({ group, plan, groups, current, onSave, onClose }: Pr
         className="drawer wide"
         role="dialog"
         aria-modal="true"
-        aria-label={`Ruya rooms for tour ${group.tourNo}`}
+        aria-label={`${names.ruya} rooms for tour ${group.tourNo}`}
         initial={{ x: '100%' }}
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
@@ -144,7 +146,7 @@ export function RoomPicker({ group, plan, groups, current, onSave, onClose }: Pr
               )}
             </p>
             {picked.length && beds < group.pax ? <p className="pick-warn">These rooms sleep {beds}; the group is {group.pax}.</p> : null}
-            {moves.length ? <p className="pick-note">{moves.join(', ')} will be moved to other rooms or to Araf.</p> : null}
+            {moves.length ? <p className="pick-note">{moves.join(', ')} will be moved to other rooms or to {names.araf}.</p> : null}
             <div className="room-actions">
               <button
                 className="btn solid"

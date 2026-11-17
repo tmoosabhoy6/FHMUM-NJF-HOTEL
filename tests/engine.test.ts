@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPlan, nightsOf, staysDepartureDay, suggestRooms } from '../shared/engine';
+import { buildPlan, hotelNames, nightsOf, reasonLabel, staysDepartureDay, suggestRooms } from '../shared/engine';
 import { describeRooms, formatSpec, parseRoomMessages, parseRoomSpec } from '../shared/roomSpec';
 import { DEFAULT_SETTINGS, OPENING_BALANCE, PLANNING_START, RUYA_SHEET, ruyaRooms } from '../shared/config';
 import type { Group, Settings } from '../shared/types';
@@ -41,11 +41,16 @@ describe('nights', () => {
     expect(staysDepartureDay(g, settings())).toBe(true);
     expect(nightsOf(g, settings())).toEqual(['2026-12-01', '2026-12-02']);
   });
+  it('counts it for Iraqi Airways from Baghdad too', () => {
+    const g = group({ pax: 5, checkIn: '2026-12-01', checkOut: '2026-12-03', departure: { kind: 'airport', place: 'Baghdad Airport', flight: 'IA 112', airline: 'IA' } });
+    expect(staysDepartureDay(g, settings())).toBe(true);
+    expect(nightsOf(g, settings())).toEqual(['2026-12-01', '2026-12-02', '2026-12-03']);
+  });
   it('does not apply the rule to first-leg groups, other airlines or other airports', () => {
     const base = { pax: 5, checkIn: '2026-12-01', checkOut: '2026-12-03' };
     expect(staysDepartureDay(group({ ...base, departure: iraqi, secondLeg: false }), settings())).toBe(false);
     expect(staysDepartureDay(group({ ...base, departure: { ...iraqi, flight: 'G9 374', airline: 'G9' } }), settings())).toBe(false);
-    expect(staysDepartureDay(group({ ...base, departure: { ...iraqi, place: 'Baghdad Airport' } }), settings())).toBe(false);
+    expect(staysDepartureDay(group({ ...base, departure: { ...iraqi, place: 'Basra Airport' } }), settings())).toBe(false);
     expect(staysDepartureDay(group({ ...base, departure: iraqi }), settings({ departureDayRule: false }))).toBe(false);
   });
 });
@@ -374,5 +379,19 @@ describe('Ruya rooms chosen by hand', () => {
     const g = group({ id: 'g', pax: 8, checkIn: '2026-12-05', checkOut: '2026-12-07' });
     const plan = buildPlan({ groups: [g], inputs: { g: { spec: '2x4', roomNos: ['101', '102'] } }, settings: DEFAULT_SETTINGS, from: PLANNING_START });
     expect(plan.placements.g.specIssue).toMatch(/not the rooms asked for/);
+  });
+});
+
+describe('renaming the hotels', () => {
+  it('uses the new names in the reasons the plan gives', () => {
+    const names = { ruya: 'Roya Palace', araf: 'Al Araf', c: 'Overflow' };
+    const groups = [
+      group({ id: 'a', pax: 80, checkIn: '2026-12-05', checkOut: '2026-12-07' }),
+      group({ id: 'b', pax: 30, checkIn: '2026-12-05', checkOut: '2026-12-07' }),
+    ];
+    const plan = buildPlan({ groups, inputs: {}, settings: { ...DEFAULT_SETTINGS, names }, from: PLANNING_START });
+    expect(plan.placements.b.hotel).toBe('araf');
+    expect(reasonLabel(plan.placements.b.reason, names)).toBe('Roya Palace is full');
+    expect(hotelNames({ ruya: '  ', araf: 'X' })).toEqual({ ruya: 'Ruya', araf: 'X', c: 'Hotel C' });
   });
 });

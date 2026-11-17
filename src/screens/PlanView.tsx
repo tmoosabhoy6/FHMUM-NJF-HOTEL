@@ -2,9 +2,10 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Fragment, useMemo, useState, type CSSProperties } from 'react';
 import { OPENING_BALANCE, RUYA_SHEET } from '../../shared/config';
 import { dayLabel, dayMonth, daysBetween, fullDate, rangeLabel } from '../../shared/dates';
-import { HOTEL_NAME, HOTEL_ORDER, REASON_LABEL } from '../../shared/engine';
+import { HOTEL_ORDER, reasonLabel } from '../../shared/engine';
 import { describeRooms, parseRoomSpec } from '../../shared/roomSpec';
-import type { DayRow, Group, GroupInput, HotelId, Placement, Plan, PullMeta } from '../../shared/types';
+import type { DayRow, Group, GroupInput, HotelId, HotelNames, Placement, Plan, PullMeta } from '../../shared/types';
+import { useNames } from '../lib/names';
 import { PendingTours } from '../components/PendingTours';
 import { RoomPicker } from '../components/RoomPicker';
 import { guests, groupsText, nightsText, Num, tint } from '../components/ui';
@@ -18,25 +19,23 @@ interface Props {
   onOpenRequests: () => void;
 }
 
-const SHORT: Partial<Record<Placement['reason'], string>> = {
-  'room-mix': 'Rooms not available in Ruya',
-  'ruya-full': 'Ruya is full',
-  'araf-full': 'Ruya and Araf are full',
-  pinned: 'Kept here by hand',
-};
+/** Short reason shown next to a group that is not in the first hotel. */
+const short = (reason: Placement['reason'] | undefined, names: HotelNames) =>
+  reason === 'room-mix' || reason === 'ruya-full' || reason === 'araf-full' || reason === 'pinned' ? reasonLabel(reason, names) : '';
 
 const nightsBetween = (from: string, lastNight: string) => daysBetween(from, lastNight) + 1;
 
 // ---- summary --------------------------------------------------------------
 
 function HotelTile({ hotel, plan }: { hotel: HotelId; plan: Plan }) {
+  const names = useNames();
   const t = plan.totals.byHotel[hotel];
   const nightsUsed = plan.days.filter((d) => d.hotels[hotel].pax > 0).length;
   const cap = hotel === 'ruya' ? plan.capacity.ruya : hotel === 'araf' ? plan.capacity.araf : null;
   return (
     <div className="tile" data-hotel={hotel} data-idle={t.groups === 0}>
       <div className="tile-name">
-        {HOTEL_NAME[hotel]}
+        {names[hotel]}
         <span>{cap ? `${cap} beds` : 'no limit'}</span>
       </div>
       {t.groups ? (
@@ -52,7 +51,7 @@ function HotelTile({ hotel, plan }: { hotel: HotelId; plan: Plan }) {
       ) : (
         <>
           <div className="tile-big none">Not needed</div>
-          <div className="tile-sub">{hotel === 'ruya' ? 'No groups in Ruya' : 'Ruya covers every group'}</div>
+          <div className="tile-sub">{hotel === 'ruya' ? `No groups in ${names.ruya}` : `${names.ruya} covers every group`}</div>
         </>
       )}
     </div>
@@ -62,6 +61,7 @@ function HotelTile({ hotel, plan }: { hotel: HotelId; plan: Plan }) {
 // ---- one night, opened from the daily table --------------------------------------
 
 function NightDetail({ day, plan, byId }: { day: DayRow; plan: Plan; byId: Map<string, Group> }) {
+  const names = useNames();
   const holdLabel = new Map(OPENING_BALANCE.map((h) => [h.id, h.label]));
   const occupant = new Map<string, string>();
   for (const id of day.hotels.ruya.groups) for (const room of plan.placements[id]?.rooms ?? []) occupant.set(room.label, id);
@@ -74,7 +74,7 @@ function NightDetail({ day, plan, byId }: { day: DayRow; plan: Plan; byId: Map<s
     <div className="night-detail">
       <div className="nd-ruya">
         <div className="nd-title" data-hotel="ruya">
-          <b>Ruya rooms</b>
+          <b>{names.ruya} rooms</b>
           <span>
             {occupant.size} of {plan.rooms.length} rooms in use · {plan.capacity.ruya - day.hotels.ruya.beds} beds free
           </span>
@@ -113,7 +113,7 @@ function NightDetail({ day, plan, byId }: { day: DayRow; plan: Plan; byId: Map<s
           return (
             <div key={hotel} className="nd-list" data-hotel={hotel}>
               <div className="nd-title" data-hotel={hotel}>
-                <b>{HOTEL_NAME[hotel]}</b>
+                <b>{names[hotel]}</b>
                 <span>{guests(day.hotels[hotel].pax)}</span>
               </div>
               {ids.length ? (
@@ -127,7 +127,7 @@ function NightDetail({ day, plan, byId }: { day: DayRow; plan: Plan; byId: Map<s
                         <span className="nd-who">{g?.leader || holdLabel.get(id) || ''}</span>
                         <span className="nd-pax">{paxOf(id)}</span>
                         {hotel === 'ruya' && p?.rooms.length ? <span className="nd-roomlist">{p.rooms.map((r) => r.label).join(', ')}</span> : null}
-                        {hotel !== 'ruya' && p ? <span className="nd-why">{p.overbooked ? 'Does not fit' : SHORT[p.reason]}</span> : null}
+                        {hotel !== 'ruya' && p ? <span className="nd-why">{p.overbooked ? 'Does not fit' : short(p.reason, names)}</span> : null}
                       </li>
                     );
                   })}
@@ -146,6 +146,7 @@ function NightDetail({ day, plan, byId }: { day: DayRow; plan: Plan; byId: Map<s
 // ---- daily plan ---------------------------------------------------------------
 
 function DailyTable({ plan, byId }: { plan: Plan; byId: Map<string, Group> }) {
+  const names = useNames();
   const [open, setOpen] = useState<string | null>(null);
   const tours = (ids: string[]) => ids.map((id) => byId.get(id)?.tourNo).filter(Boolean).join(', ');
   const pax = (ids: string[]) => ids.reduce((sum, id) => sum + (byId.get(id)?.pax ?? 0), 0);
@@ -154,7 +155,7 @@ function DailyTable({ plan, byId }: { plan: Plan; byId: Map<string, Group> }) {
     for (const hotel of ['araf', 'c'] as const) {
       for (const id of day.hotels[hotel].groups) {
         const p = plan.placements[id];
-        const label = p?.overbooked ? 'Does not fit' : (SHORT[p?.reason ?? 'fits'] ?? '');
+        const label = p?.overbooked ? 'Does not fit' : short(p?.reason, names);
         reasons.set(label, [...(reasons.get(label) ?? []), byId.get(id)?.tourNo ?? id]);
       }
     }
@@ -168,23 +169,25 @@ function DailyTable({ plan, byId }: { plan: Plan; byId: Map<string, Group> }) {
           <tr>
             <th scope="col">Date</th>
             <th scope="col" className="n" data-hotel="ruya">
-              Ruya <small>of {plan.capacity.ruya}</small>
+              {names.ruya} <small>of {plan.capacity.ruya}</small>
             </th>
             <th scope="col" className="n" data-hotel="araf">
-              Araf <small>of {plan.capacity.araf}</small>
+              {names.araf} <small>of {plan.capacity.araf}</small>
             </th>
             <th scope="col" className="n" data-hotel="c">
-              Hotel C
+              {names.c}
             </th>
             <th scope="col" className="n">
               All guests
             </th>
             <th scope="col" className="n">
-              Ruya beds free
+              {names.ruya} beds free
             </th>
             <th scope="col">Arriving</th>
             <th scope="col">Leaving</th>
-            <th scope="col">Why Araf or Hotel C</th>
+            <th scope="col">
+              Why {names.araf} or {names.c}
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -258,6 +261,7 @@ function DailyTable({ plan, byId }: { plan: Plan; byId: Map<string, Group> }) {
 // ---- bookings ------------------------------------------------------------------
 
 function BookingsTable({ plan, byId }: { plan: Plan; byId: Map<string, Group> }) {
+  const names = useNames();
   const rows = plan.bookings.flatMap((b) =>
     b.steps.map((step) => ({
       key: `${b.hotel}-${step.from}`,
@@ -266,7 +270,7 @@ function BookingsTable({ plan, byId }: { plan: Plan; byId: Map<string, Group> })
       ids: b.groupIds.filter((id) => plan.placements[id]?.nights.some((n) => n >= step.from && n <= step.lastNight)),
     })),
   );
-  if (!rows.length) return <div className="all-clear">Ruya covers every night. Nothing to book at Araf or Hotel C.</div>;
+  if (!rows.length) return <div className="all-clear">{names.ruya} covers every night. Nothing to book at {names.araf} or {names.c}.</div>;
   return (
     <div className="sheet-wrap">
       <table className="sheet">
@@ -289,7 +293,7 @@ function BookingsTable({ plan, byId }: { plan: Plan; byId: Map<string, Group> })
             <tr key={r.key}>
               <td>
                 <span className="chip" data-hotel={r.hotel}>
-                  {HOTEL_NAME[r.hotel]}
+                  {names[r.hotel]}
                 </span>
               </td>
               <td>{fullDate(r.from)}</td>
@@ -308,6 +312,7 @@ function BookingsTable({ plan, byId }: { plan: Plan; byId: Map<string, Group> })
 // ---- groups ---------------------------------------------------------------------
 
 function RoomsCell({ group, input, placement, onInput }: { group: Group; input: GroupInput; placement: Placement | undefined; onInput: Props['onInput'] }) {
+  const names = useNames();
   const parsed = parseRoomSpec(input.spec);
   const typed = Boolean(input.spec?.trim());
   let read: { text: string; bad: boolean } | null = null;
@@ -320,7 +325,7 @@ function RoomsCell({ group, input, placement, onInput }: { group: Group; input: 
         type="text"
         value={input.spec ?? ''}
         placeholder="e.g. 2x6, 3x1"
-        aria-label={`Rooms tour ${group.tourNo} needs in Ruya`}
+        aria-label={`Rooms tour ${group.tourNo} needs in ${names.ruya}`}
         spellCheck={false}
         onChange={(e) => onInput(group.tourNo, { spec: e.target.value })}
       />
@@ -329,13 +334,16 @@ function RoomsCell({ group, input, placement, onInput }: { group: Group; input: 
   );
 }
 
-function notesFor(group: Group, placement: Placement | undefined, input: GroupInput): { text: string; warn: boolean }[] {
+function notesFor(group: Group, placement: Placement | undefined, input: GroupInput, names: HotelNames): { text: string; warn: boolean }[] {
   const notes: { text: string; warn: boolean }[] = [];
   if (placement) {
     if (placement.overbooked) notes.push({ text: `Does not fit. ${placement.detail}`, warn: true });
-    else if (placement.hotel !== 'ruya' || placement.reason === 'pinned') notes.push({ text: `${REASON_LABEL[placement.reason]}. ${placement.reason === 'pinned' ? '' : placement.detail}`.trim(), warn: placement.hotel !== 'ruya' });
+    else if (placement.hotel !== 'ruya' || placement.reason === 'pinned') notes.push({ text: `${reasonLabel(placement.reason, names)}. ${placement.reason === 'pinned' ? '' : placement.detail}`.trim(), warn: placement.hotel !== 'ruya' });
     if (placement.specIssue) notes.push({ text: placement.specIssue, warn: true });
-    if (placement.staysDepartureDay) notes.push({ text: `Flies ${group.departure.flight ?? 'Iraqi Airways'} from Najaf: departure day counted as a night.`, warn: false });
+    if (placement.staysDepartureDay) {
+      const airport = /baghdad/i.test(group.departure.place) ? 'Baghdad' : 'Najaf';
+      notes.push({ text: `Flies ${group.departure.flight ?? 'Iraqi Airways'} from ${airport}: departure day counted as a night.`, warn: false });
+    }
   }
   const m = input.message;
   if (m && input.spec) {
@@ -348,6 +356,7 @@ function notesFor(group: Group, placement: Placement | undefined, input: GroupIn
 }
 
 function GroupsTable({ list, plan, inputs, onInput, onPick }: { list: Group[]; plan: Plan; inputs: Props['inputs']; onInput: Props['onInput']; onPick: (groupId: string) => void }) {
+  const names = useNames();
   return (
     <div className="sheet-wrap">
       <table className="sheet groups">
@@ -365,7 +374,7 @@ function GroupsTable({ list, plan, inputs, onInput, onPick }: { list: Group[]; p
             </th>
             <th scope="col">Hotel</th>
             <th scope="col">Rooms asked for</th>
-            <th scope="col">Ruya rooms</th>
+            <th scope="col">{names.ruya} rooms</th>
             <th scope="col">Notes</th>
           </tr>
         </thead>
@@ -374,7 +383,7 @@ function GroupsTable({ list, plan, inputs, onInput, onPick }: { list: Group[]; p
             const placement = plan.placements[group.id];
             const input = inputs[group.id] ?? {};
             const hotel: HotelId | null = placement?.hotel ?? null;
-            const notes = notesFor(group, placement, input);
+            const notes = notesFor(group, placement, input, names);
             return (
               <tr key={group.id} data-flag={Boolean(placement && (placement.hotel !== 'ruya' || placement.overbooked))}>
                 <th scope="row" className="tour">
@@ -401,11 +410,11 @@ function GroupsTable({ list, plan, inputs, onInput, onPick }: { list: Group[]; p
                       onInput(group.tourNo, { pin: (e.target.value || null) as HotelId | null, roomNos: undefined });
                     }}
                   >
-                    {input.roomNos?.length ? <option value="rooms">Ruya, rooms by hand</option> : null}
-                    <option value="">{hotel && !input.roomNos?.length ? HOTEL_NAME[hotel] : 'Let the planner decide'}</option>
+                    {input.roomNos?.length ? <option value="rooms">{names.ruya}, rooms by hand</option> : null}
+                    <option value="">{hotel && !input.roomNos?.length ? names[hotel] : 'Let the planner decide'}</option>
                     {HOTEL_ORDER.map((h) => (
                       <option key={h} value={h}>
-                        Keep in {HOTEL_NAME[h]}
+                        Keep in {names[h]}
                       </option>
                     ))}
                   </select>
@@ -439,6 +448,7 @@ function GroupsTable({ list, plan, inputs, onInput, onPick }: { list: Group[]; p
 // ---- the page --------------------------------------------------------------------
 
 export function PlanView({ groups, plan, meta, inputs, onInput, onOpenRequests }: Props) {
+  const names = useNames();
   const byId = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
   // Groups that reached Najaf before the first night are covered by the opening balance (rooms 109, 110, 201, 202).
   const before = new Set(plan.before);
@@ -470,10 +480,10 @@ export function PlanView({ groups, plan, meta, inputs, onInput, onOpenRequests }
             {groupsText(totals.groups)}, {guests(totals.guests)} who need a hotel.{' '}
             {otherNights ? (
               <>
-                Ruya is not enough on <b>{nightsText(otherNights)}</b>.
+                {names.ruya} is not enough on <b>{nightsText(otherNights)}</b>.
               </>
             ) : (
-              'Ruya covers every night.'
+              `${names.ruya} covers every night.`
             )}
           </p>
           {meta.notApproved ? (
@@ -508,7 +518,7 @@ export function PlanView({ groups, plan, meta, inputs, onInput, onOpenRequests }
       <section className="block">
         <div className="block-head">
           <h2>Bookings to make</h2>
-          <p>Every run of nights when Ruya alone is not enough.</p>
+          <p>Every run of nights when {names.ruya} alone is not enough.</p>
         </div>
         <BookingsTable plan={plan} byId={byId} />
       </section>
@@ -521,7 +531,7 @@ export function PlanView({ groups, plan, meta, inputs, onInput, onOpenRequests }
             <button className="linkish" onClick={onOpenRequests}>
               Paste room requests
             </button>{' '}
-            or type them as bed size × rooms (2x6 is six 2-bed rooms). “Choose rooms” picks exact Ruya rooms by hand. Then press{' '}
+            or type them as bed size × rooms (2x6 is six 2-bed rooms). “Choose rooms” picks exact {names.ruya} rooms by hand. Then press{' '}
             <b>Refresh plan</b> to rebuild the plan with them.
           </p>
         </div>

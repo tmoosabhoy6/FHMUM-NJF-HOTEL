@@ -2,6 +2,7 @@ import { motion } from 'motion/react';
 import { useMemo } from 'react';
 import { addDays, dayMonth, dayNumber, eachDate, fullDate, monthShort } from '../../shared/dates';
 import { Brand, Num } from '../components/ui';
+import { useNames } from '../lib/names';
 import { STEP_ORDER, STEP_TITLE, type PullProgress, type ServerState } from '../lib/sync';
 
 interface Props {
@@ -73,6 +74,7 @@ function Facade({ dates, progress, pulling }: { dates: string[]; progress: PullP
 }
 
 export function Night(props: Props) {
+  const names = useNames();
   const { mode, from, to, progress, error } = props;
   const pulling = mode === 'pulling';
   const previewDates = useMemo(() => {
@@ -146,7 +148,7 @@ export function Night(props: Props) {
               <h1>Know which hotel, before they land.</h1>
               <p className="lede">
                 Pulls every approved FH Mumbai tour staying in Najaf from NKERP, counts the guests who need a hotel, then places each
-                group in Ruya, Araf or Hotel C, night by night.
+                group in {names.ruya}, {names.araf} or {names.c}, night by night.
               </p>
               <form
                 className="pull-form"

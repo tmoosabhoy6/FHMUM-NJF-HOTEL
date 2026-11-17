@@ -78,7 +78,7 @@ Bed size first, then rooms, as the team writes them:
   on every night of its stay.
 - A group sleeps from its Najaf arrival date to the night before it leaves. If
   Najaf is the second half of the trip and the group flies Iraqi Airways out of
-  Najaf Airport, the departure day counts as a night too.
+  Najaf Airport or Baghdad Airport, the departure day counts as a night too.
 - Beds freed by a departure go to arrivals on the same date. Groups are placed
   in arrival order, larger groups first on the same date.
 - A group gets exactly the Ruya rooms it asked for or none. If it cannot, the
@@ -101,6 +101,8 @@ Bed size first, then rooms, as the team writes them:
 - **Opening balance:** rooms 109, 110, 201 and 202 are taken on 1 Dec and
   free from 2 Dec.
 - **Araf:** 100 beds.
+- **Names:** the three hotels can be renamed under "Hotels and rooms"; the new
+  names show everywhere, including the Excel file (saved per device).
 
 ## NKERP access
 

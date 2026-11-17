@@ -9,8 +9,8 @@
  *    must have room for the whole group on every night of the stay.
  * 3. A group sleeps from its Najaf arrival date up to the night before its
  *    departure date. If Najaf is the second half of the trip and the group
- *    flies out of Najaf Airport on Iraqi Airways, the departure day counts as
- *    a night too.
+ *    flies Iraqi Airways out of Najaf Airport or Baghdad Airport, the
+ *    departure day counts as a night too.
  * 4. Rooms freed by a departure are available to arrivals on that same date.
  * 5. Groups are placed in arrival order; on the same date larger groups go
  *    first, so the biggest groups get the first claim on Ruya.
@@ -30,20 +30,48 @@
  */
 import { addDays, dayMonth, eachDate } from './dates';
 import { describeRooms, groupRooms, parseRoomSpec } from './roomSpec';
-import type { Booking, DayRow, Group, GroupInput, Hold, HotelDay, HotelId, Placement, Plan, Reason, Room, Settings } from './types';
+import type { Booking, DayRow, Group, GroupInput, Hold, HotelDay, HotelId, HotelNames, Placement, Plan, Reason, Room, Settings } from './types';
 
 export const HOTEL_ORDER: HotelId[] = ['ruya', 'araf', 'c'];
-export const HOTEL_NAME: Record<HotelId, string> = { ruya: 'Ruya', araf: 'Araf', c: 'Hotel C' };
+/** The hotels' names unless staff rename them (Settings.names). */
+export const DEFAULT_HOTEL_NAMES: HotelNames = { ruya: 'Ruya', araf: 'Araf', c: 'Hotel C' };
+export const HOTEL_NAME = DEFAULT_HOTEL_NAMES;
+
+/** Names to show: the ones given, with any blank one falling back to its default. */
+export function hotelNames(names?: Partial<HotelNames> | null): HotelNames {
+  const pick = (id: HotelId) => names?.[id]?.trim() || DEFAULT_HOTEL_NAMES[id];
+  return { ruya: pick('ruya'), araf: pick('araf'), c: pick('c') };
+}
 
 /** The flag shown for each reason. `detail` on the placement carries the evidence. */
+export function reasonLabel(reason: Reason, names: HotelNames = DEFAULT_HOTEL_NAMES): string {
+  switch (reason) {
+    case 'fits':
+      return `In ${names.ruya}`;
+    case 'room-mix':
+      return `Rooms not available in ${names.ruya}`;
+    case 'ruya-full':
+      return `${names.ruya} is full`;
+    case 'araf-full':
+      return `${names.ruya} and ${names.araf} are full`;
+    case 'pinned':
+      return 'Kept here by hand';
+    case 'held':
+      return 'Opening balance';
+  }
+}
+
 export const REASON_LABEL: Record<Reason, string> = {
-  fits: 'In Ruya',
-  'room-mix': 'Rooms not available in Ruya',
-  'ruya-full': 'Ruya is full',
-  'araf-full': 'Ruya and Araf are full',
-  pinned: 'Kept here by hand',
-  held: 'Opening balance',
+  fits: reasonLabel('fits'),
+  'room-mix': reasonLabel('room-mix'),
+  'ruya-full': reasonLabel('ruya-full'),
+  'araf-full': reasonLabel('araf-full'),
+  pinned: reasonLabel('pinned'),
+  held: reasonLabel('held'),
 };
+
+/** Airports whose Iraqi Airways departures keep the group in Najaf on the departure day. */
+export const DEPARTURE_DAY_AIRPORTS = /najaf|baghdad/i;
 
 /** True when the group's departure day counts as a night of its stay. */
 export function staysDepartureDay(group: Group, settings: Pick<Settings, 'departureDayRule'>): boolean {
@@ -52,7 +80,7 @@ export function staysDepartureDay(group: Group, settings: Pick<Settings, 'depart
   return (
     group.secondLeg &&
     departure.kind === 'airport' &&
-    /najaf/i.test(departure.place) &&
+    DEPARTURE_DAY_AIRPORTS.test(departure.place) &&
     (departure.airline === 'IA' || departure.airline === 'IAW')
   );
 }
@@ -279,6 +307,7 @@ export interface PlanInput {
 }
 
 export function buildPlan({ groups, inputs, settings, holds = [], from, to, start = null }: PlanInput): Plan {
+  const name = hotelNames(settings.names);
   const ruya = new Ruya(settings);
   const araf = new HeadCount(settings.arafCapacity);
   const placements: Record<string, Placement> = {};
@@ -321,7 +350,7 @@ export function buildPlan({ groups, inputs, settings, holds = [], from, to, star
     placements[hold.id] = base(hold.id, nights, {
       hotel: hold.hotel,
       reason: 'held',
-      detail: `${hold.label}: already in ${HOTEL_NAME[hold.hotel]} at the start.`,
+      detail: `${hold.label}: already in ${name[hold.hotel]} at the start.`,
       rooms,
       beds: rooms.reduce((sum, r) => sum + r.beds, 0),
       carriedOver: true,
@@ -429,8 +458,8 @@ export function buildPlan({ groups, inputs, settings, holds = [], from, to, star
         hotel,
         reason: 'pinned',
         detail: overbooked
-          ? `Kept in ${HOTEL_NAME[hotel]} by hand, but it does not fit there.`
-          : `Kept in ${HOTEL_NAME[hotel]} by hand.`,
+          ? `Kept in ${name[hotel]} by hand, but it does not fit there.`
+          : `Kept in ${name[hotel]} by hand.`,
         rooms: toRooms(rooms),
         spec: usedSpec,
         specSource: source,
@@ -448,7 +477,7 @@ export function buildPlan({ groups, inputs, settings, holds = [], from, to, star
         ...common,
         hotel: 'ruya',
         reason: 'fits',
-        detail: fit.rooms.length ? `In Ruya: ${describeRooms(fit.rooms.map((r) => r.beds))}.` : 'In Ruya.',
+        detail: fit.rooms.length ? `In ${name.ruya}: ${describeRooms(fit.rooms.map((r) => r.beds))}.` : `In ${name.ruya}.`,
         rooms: toRooms(fit.rooms),
         spec: fit.spec,
         specSource: fit.source,
@@ -470,7 +499,7 @@ export function buildPlan({ groups, inputs, settings, holds = [], from, to, star
       ...common,
       hotel: 'c',
       reason: 'araf-full',
-      detail: `${fit.reason === 'room-mix' ? `Ruya: ${fit.detail.charAt(0).toLowerCase()}${fit.detail.slice(1)}` : `Ruya has ${fit.detail}`} Araf has ${bedsFree(arafTight)}.`,
+      detail: `${fit.reason === 'room-mix' ? `${name.ruya}: ${fit.detail.charAt(0).toLowerCase()}${fit.detail.slice(1)}` : `${name.ruya} has ${fit.detail}`} ${name.araf} has ${bedsFree(arafTight)}.`,
     });
   }
 
