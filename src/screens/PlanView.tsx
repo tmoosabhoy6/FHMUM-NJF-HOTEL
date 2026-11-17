@@ -96,7 +96,7 @@ function NightDetail({ day, plan, byId }: { day: DayRow; plan: Plan; byId: Map<s
                     title={out ? `Room ${room.no}: not in the plan` : id ? `Room ${room.no}: ${name(id)}` : `Room ${room.no}: free`}
                   >
                     <b>{room.no}</b>
-                    <span>{out ? 'not ours' : id ? (byId.get(id)?.tourNo ?? 'Nov') : `${room.beds} beds`}</span>
+                    {out ? null : <span>{id ? (byId.get(id)?.tourNo ?? 'Nov') : `${room.beds} beds`}</span>}
                   </span>
                 );
               })}

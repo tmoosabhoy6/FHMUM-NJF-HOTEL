@@ -1149,10 +1149,13 @@ button {
   font-weight: 700;
 }
 
+/* A room left out of the plan: crossed out. */
 .nd-room[data-out='true'] {
-  background: repeating-linear-gradient(135deg, var(--sunk) 0 4px, var(--surface) 4px 8px);
+  background:
+    linear-gradient(to top right, transparent calc(50% - 0.75px), var(--ink-3) 50%, transparent calc(50% + 0.75px)),
+    linear-gradient(to bottom right, transparent calc(50% - 0.75px), var(--ink-3) 50%, transparent calc(50% + 0.75px)),
+    var(--surface);
   color: var(--ink-3);
-  border-style: dashed;
 }
 
 .nd-lists {
@@ -1548,13 +1551,12 @@ button {
 }
 
 .room-key[data-out='true'] {
-  background: var(--surface);
-  border: 1px dashed var(--line);
+  background:
+    linear-gradient(to top right, transparent calc(50% - 0.75px), var(--ink-3) 50%, transparent calc(50% + 0.75px)),
+    linear-gradient(to bottom right, transparent calc(50% - 0.75px), var(--ink-3) 50%, transparent calc(50% + 0.75px)),
+    var(--surface);
+  border: 1px solid var(--line);
   color: var(--ink-3);
-}
-
-.room-key[data-out='true'] b {
-  text-decoration: line-through;
 }
 
 /* Room requests */
