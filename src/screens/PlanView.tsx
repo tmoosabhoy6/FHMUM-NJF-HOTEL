@@ -1,6 +1,6 @@
 import { motion } from 'motion/react';
 import { Fragment, useMemo, useState, type CSSProperties } from 'react';
-import { OPENING_BALANCE, PLANNING_START, RUYA_SHEET } from '../../shared/config';
+import { OPENING_BALANCE, RUYA_SHEET } from '../../shared/config';
 import { dayLabel, dayMonth, daysBetween, fullDate, rangeLabel } from '../../shared/dates';
 import { HOTEL_NAME, HOTEL_ORDER, REASON_LABEL } from '../../shared/engine';
 import { describeRooms, parseRoomSpec } from '../../shared/roomSpec';
@@ -344,7 +344,7 @@ function notesFor(group: Group, placement: Placement | undefined, input: GroupIn
   return notes;
 }
 
-function GroupsTable({ list, plan, inputs, onInput, before = false }: { list: Group[]; plan: Plan; inputs: Props['inputs']; onInput: Props['onInput']; before?: boolean }) {
+function GroupsTable({ list, plan, inputs, onInput }: { list: Group[]; plan: Plan; inputs: Props['inputs']; onInput: Props['onInput'] }) {
   return (
     <div className="sheet-wrap">
       <table className="sheet groups">
@@ -361,8 +361,8 @@ function GroupsTable({ list, plan, inputs, onInput, before = false }: { list: Gr
               Nights
             </th>
             <th scope="col">Hotel</th>
-            {before ? null : <th scope="col">Rooms asked for</th>}
-            {before ? null : <th scope="col">Ruya rooms</th>}
+            <th scope="col">Rooms asked for</th>
+            <th scope="col">Ruya rooms</th>
             <th scope="col">Notes</th>
           </tr>
         </thead>
@@ -402,14 +402,11 @@ function GroupsTable({ list, plan, inputs, onInput, before = false }: { list: Gr
                     ))}
                   </select>
                 </td>
-                {before ? null : (
-                  <td className="rooms">
-                    <RoomsCell group={group} input={input} placement={placement} onInput={onInput} />
-                  </td>
-                )}
-                {before ? null : <td className="room-nos">{placement?.rooms.map((r) => r.label).join(', ') || ''}</td>}
+                <td className="rooms">
+                  <RoomsCell group={group} input={input} placement={placement} onInput={onInput} />
+                </td>
+                <td className="room-nos">{placement?.rooms.map((r) => r.label).join(', ') || ''}</td>
                 <td className="notes">
-                  {before && !placement ? <span className="note">Housed under the November arrangement.</span> : null}
                   {notes.map((n) => (
                     <span key={n.text} className="note" data-warn={n.warn}>
                       {n.text}
@@ -429,14 +426,14 @@ function GroupsTable({ list, plan, inputs, onInput, before = false }: { list: Gr
 
 export function PlanView({ groups, plan, meta, inputs, onInput, onOpenRequests }: Props) {
   const byId = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
+  // Groups that reached Najaf before the first night are covered by the opening balance (rooms 109, 110, 201, 202).
   const before = new Set(plan.before);
   const planned = groups.filter((g) => !before.has(g.id) && g.pax > 0);
-  const early = groups.filter((g) => before.has(g.id));
   const { totals } = plan;
   const asked = planned.filter((g) => inputs[g.id]?.spec?.trim()).length;
   const otherNights = plan.days.filter((d) => d.hotels.araf.pax + d.hotels.c.pax > 0).length;
 
-  if (!groups.length) {
+  if (!planned.length) {
     return (
       <main className="page">
         <div className="empty">
@@ -506,18 +503,6 @@ export function PlanView({ groups, plan, meta, inputs, onInput, onOpenRequests }
         <GroupsTable list={planned} plan={plan} inputs={inputs} onInput={onInput} />
       </section>
 
-      {early.length ? (
-        <section className="block">
-          <div className="block-head">
-            <h2>Already in Najaf before {dayMonth(PLANNING_START)}</h2>
-            <p>
-              Housed under the November arrangement, so they are not placed. Only rooms {OPENING_BALANCE[0]?.roomLabels?.join(', ')} are taken in Ruya
-              on the first night. Choose a hotel to count one of these groups there.
-            </p>
-          </div>
-          <GroupsTable list={early} plan={plan} inputs={inputs} onInput={onInput} before />
-        </section>
-      ) : null}
     </main>
   );
 }

@@ -78,9 +78,9 @@ Bed size first, then rooms, as the team writes them:
   available in Ruya** (the beds were there, the rooms were not) or **Ruya is
   full** (not enough beds). With no request, the tightest set of rooms is used.
 - Staff can keep a group in a chosen hotel; it is flagged if it does not fit.
-- The plan starts on 1 Dec. Groups that reached Najaf earlier are housed under
-  the November arrangement: they are listed but not placed, unless someone
-  keeps one in a hotel by hand.
+- The plan starts on 1 Dec. Groups that reached Najaf earlier are covered by
+  the opening balance (rooms 109, 110, 201 and 202), so they are left out of
+  the plan.
 
 ## Hotel data (`shared/config.ts`)
 
