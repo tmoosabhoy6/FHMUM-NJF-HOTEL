@@ -41,7 +41,9 @@ Build): every push to `main` builds with `npm run build` and deploys with
      Pending with no plans until NKERP re-approves it. For pending tours the
      pull reads the tour's sub-venue plans; if it is awaiting re-approval it
      is planned with its latest dates (marked in the Groups table). Tours that
-     were never approved are counted and shown as "still pending".
+     were never approved are not planned; "See the pending tours" on the plan
+     lists them (trip dates, ports, Najaf dates if any, guests who will need a
+     hotel), and the Excel file has a "Pending tours" sheet.
    - **Each tour's guest list**, person by person. A guest marked
      "accommodation not required" needs a bed from us, whether or not the rest
      of the tour is housed by NKERP. Cancelled, inactive and dummy guests are

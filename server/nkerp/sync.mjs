@@ -14,7 +14,7 @@
  * so the loading screen can show it live: a window lights for each day once
  * every tour arriving by that day has been counted.
  */
-import { addDays, countGuests, daysBetween, isApprovedTour, isLiveTour, reapprovalRow, sameOffice, staysFromGroupRow, withGuests } from './normalize.mjs';
+import { addDays, countGuests, daysBetween, isApprovedTour, isLiveTour, pendingTour, reapprovalRow, sameOffice, staysFromGroupRow, withGuests } from './normalize.mjs';
 
 export const DEFAULT_OFFICE = 'Fayz E Husayni Trust Mumbai';
 const LOOKBACK_DAYS = 45; // a tour that started this long before the range can still be in Najaf
@@ -113,6 +113,7 @@ export async function runSync({ client, from, to: toInput = null, office = DEFAU
   // Tours awaiting re-approval: General search shows them with no plans, so read their plans.
   let notApproved = 0;
   let reapproval = 0;
+  const waiting = [];
   if (pending.length) {
     step('tours', 'active', `Checking ${pending.length} pending tours for re-approval`);
     await pool(pending, POOL, async (row) => {
@@ -124,6 +125,7 @@ export async function runSync({ client, from, to: toInput = null, office = DEFAU
         reapproval += 1;
       } else if (!updated) {
         notApproved += 1;
+        waiting.push(pendingTour(row, data?.TourPlan));
       }
     });
   }
@@ -194,6 +196,7 @@ export async function runSync({ client, from, to: toInput = null, office = DEFAU
       nkerpHousedOnly: counted.filter((s) => s.pax === 0).length,
       notApproved,
       reapproval,
+      pending: waiting.sort((a, b) => String(a.start).localeCompare(String(b.start)) || a.tourNo.localeCompare(b.tourNo, undefined, { numeric: true })),
       toursRead: tours.length,
       requests: client.requests,
       seconds: Math.round((Date.now() - started) / 100) / 10,

@@ -49,6 +49,8 @@ export interface PullMeta {
   notApproved: number;
   /** Approved tours that were updated and await re-approval; planned with their latest dates. */
   reapproval?: number;
+  /** Tours in the range that are not approved yet, with what NKERP says about them. */
+  pending?: PendingTour[];
   /** Guest lists read, one per tour. */
   toursRead: number;
   requests: number;
@@ -200,4 +202,29 @@ export interface Plan {
     byHotel: Record<HotelId, { groups: number; guests: number; guestNights: number; peak: number }>;
     flagged: number;
   };
+}
+
+/** A tour that is not approved yet (shown in the "Pending tours" table, not planned). */
+export interface PendingTour {
+  tourId: number;
+  ref: string;
+  tourNo: string;
+  /** NKERP status, e.g. "Pending" or "Draft". */
+  status: string;
+  reapproval: boolean;
+  /** Arrival in and departure from Iraq, YYYY-MM-DD. */
+  start: string | null;
+  end: string | null;
+  entryPort: string;
+  exitPort: string;
+  /** Sub-venue order, e.g. "Karbala → Najaf". Empty when NKERP has no plans yet. */
+  route: string;
+  /** Najaf stays from the tour's latest plans, when it has any. */
+  najaf: { checkIn: string; checkOut: string }[];
+  pax: number;
+  /** Guests marked "accommodation not required" (infants not counted), as NKERP counts them for the tour. */
+  needHotel: number | null;
+  /** Guests NKERP houses. */
+  housed: number | null;
+  remarks: string;
 }

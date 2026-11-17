@@ -132,6 +132,38 @@ export async function exportPlan(plan: Plan, groups: Group[], meta: PullMeta) {
   }
   head(list);
 
+  // ---- tours not approved yet ----------------------------------------------
+  if (meta.pending?.length) {
+    const pending = book.addWorksheet('Pending tours');
+    pending.columns = [
+      { header: 'Tour', key: 'tour', width: 9 },
+      { header: 'Status', key: 'status', width: 12 },
+      { header: 'Arrives', key: 'start', width: 14 },
+      { header: 'Leaves', key: 'end', width: 14 },
+      { header: 'Ports', key: 'ports', width: 32 },
+      { header: 'Najaf', key: 'najaf', width: 26 },
+      { header: 'Guests', key: 'pax', width: 9 },
+      { header: 'Need a hotel', key: 'need', width: 13 },
+      { header: 'Housed by NKERP', key: 'housed', width: 16 },
+      { header: 'Note', key: 'note', width: 30 },
+    ];
+    for (const t of meta.pending) {
+      pending.addRow({
+        tour: Number(t.tourNo) || t.tourNo,
+        status: t.status,
+        start: t.start ? fullDate(t.start) : '',
+        end: t.end ? fullDate(t.end) : '',
+        ports: t.exitPort && t.exitPort !== t.entryPort ? `${t.entryPort} → ${t.exitPort}` : t.entryPort,
+        najaf: t.najaf.length ? t.najaf.map((n) => `${fullDate(n.checkIn)} – ${fullDate(n.checkOut)}`).join('; ') : 'No dates in NKERP yet',
+        pax: t.pax,
+        need: t.needHotel ?? '',
+        housed: t.housed ?? '',
+        note: t.remarks,
+      });
+    }
+    head(pending);
+  }
+
   const buffer = await book.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const link = document.createElement('a');

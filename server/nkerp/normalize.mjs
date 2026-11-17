@@ -76,17 +76,20 @@ export const isLiveTour = (row) => row?.IsActive !== false && !/DELETED|REJECTED
  * tour's sub-venue plans, or null when the tour is not awaiting re-approval
  * or has no plans.
  */
+/** The current version of a tour's sub-venue plans: the active ones, else the ones saved last, together. */
+export function latestPlans(tourPlan) {
+  const plans = (tourPlan?.TourSubvenuePlan ?? []).filter((p) => p && !p.IsRemoved && p.StartDateTimeZone && p.EndDateTimeZone);
+  const active = plans.filter((p) => p.IsActive !== false);
+  if (active.length || !plans.length) return active;
+  const newest = plans.reduce((max, p) => (String(p.CreatedOn) > max ? String(p.CreatedOn) : max), '');
+  const cutoff = Date.parse(newest) - 60_000; // plans saved together share a timestamp, give or take
+  return plans.filter((p) => Date.parse(String(p.CreatedOn)) >= cutoff);
+}
+
 export function reapprovalRow(row, tourPlan) {
   if (!tourPlan?.IsReApproval) return null;
-  const plans = (tourPlan.TourSubvenuePlan ?? []).filter((p) => p && !p.IsRemoved && p.StartDateTimeZone && p.EndDateTimeZone);
-  if (!plans.length) return null;
-  const active = plans.filter((p) => p.IsActive !== false);
-  let latest = active;
-  if (!active.length) {
-    const newest = plans.reduce((max, p) => (String(p.CreatedOn) > max ? String(p.CreatedOn) : max), '');
-    const cutoff = Date.parse(newest) - 60_000; // plans saved together share a timestamp, give or take
-    latest = plans.filter((p) => Date.parse(String(p.CreatedOn)) >= cutoff);
-  }
+  const latest = latestPlans(tourPlan);
+  if (!latest.length) return null;
   return {
     ...row,
     TourId: row?.TourId ?? tourPlan.Id,
@@ -167,6 +170,41 @@ export function staysFromGroupRow(row) {
     });
   });
   return stays;
+}
+
+/**
+ * A tour that is not approved yet, for the "Pending tours" table: what the
+ * tour says about itself (trip dates, ports, guests and the guests who need a
+ * hotel, as NKERP counts them for the tour), and its Najaf dates when it has
+ * any plans.
+ */
+export function pendingTour(row, tourPlan) {
+  const t = tourPlan ?? {};
+  const ref = clean(row?.ReferenceNo ?? t.ReferenceNo);
+  const plans = latestPlans(t).sort((a, b) => String(a.StartDateTimeZone).localeCompare(String(b.StartDateTimeZone)));
+  const najaf = plans
+    .filter((p) => Number(p.SubvenueId) === SUBVENUE_NAJAF || upper(p.SubvenueName) === NAJAF)
+    .map((p) => ({ checkIn: dateOf(p.StartDateTimeZone), checkOut: endDateOf(p.EndDateTimeZone) }))
+    .filter((n) => n.checkIn && n.checkOut);
+  const name = (p) => (upper(p.SubvenueName) === NAJAF ? 'Najaf' : upper(p.SubvenueName) === KARBALA ? 'Karbala' : clean(p.SubvenueName));
+  const count = (value) => (value === null || value === undefined ? null : Number(value) || 0);
+  return {
+    tourId: row?.TourId ?? t.Id,
+    ref,
+    tourNo: ref.split('/').pop(),
+    status: clean(row?.Status) || 'Pending',
+    reapproval: Boolean(t.IsReApproval),
+    start: dateOf(row?.StartDate ?? t.StartDate),
+    end: dateOf(row?.EndDate ?? t.EndDate),
+    entryPort: clean(row?.EntryPort ?? t.EntryPortName),
+    exitPort: clean(row?.ExitPort ?? t.ExitPortName),
+    route: plans.map(name).join(' → '),
+    najaf,
+    pax: Number(row?.PaxCount ?? t.PaxCount) || 0,
+    needHotel: count(t.PaxNotRequiredAcc),
+    housed: count(t.PaxRequiredAcc),
+    remarks: clean(t.Remarks),
+  };
 }
 
 /**

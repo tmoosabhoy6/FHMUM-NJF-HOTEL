@@ -5,6 +5,7 @@ import { dayLabel, dayMonth, daysBetween, fullDate, rangeLabel } from '../../sha
 import { HOTEL_NAME, HOTEL_ORDER, REASON_LABEL } from '../../shared/engine';
 import { describeRooms, parseRoomSpec } from '../../shared/roomSpec';
 import type { DayRow, Group, GroupInput, HotelId, Placement, Plan, PullMeta } from '../../shared/types';
+import { PendingTours } from '../components/PendingTours';
 import { RoomPicker } from '../components/RoomPicker';
 import { guests, groupsText, nightsText, Num, tint } from '../components/ui';
 
@@ -445,6 +446,7 @@ export function PlanView({ groups, plan, meta, inputs, onInput, onOpenRequests }
   const { totals } = plan;
   const asked = planned.filter((g) => inputs[g.id]?.spec?.trim()).length;
   const [picking, setPicking] = useState<string | null>(null);
+  const [showPending, setShowPending] = useState(false);
   const pickingGroup = picking ? byId.get(picking) : undefined;
   const otherNights = plan.days.filter((d) => d.hotels.araf.pax + d.hotels.c.pax > 0).length;
 
@@ -477,7 +479,14 @@ export function PlanView({ groups, plan, meta, inputs, onInput, onOpenRequests }
           {meta.notApproved ? (
             <p className="overview-note">
               {meta.notApproved} more {meta.notApproved === 1 ? 'tour' : 'tours'} in this period {meta.notApproved === 1 ? 'is' : 'are'} still pending in NKERP. They join
-              the plan once approved.
+              the plan once approved.{' '}
+              {meta.pending?.length ? (
+                <button className="linkish" onClick={() => setShowPending(true)}>
+                  See the pending tours
+                </button>
+              ) : (
+                <span>Pull again to see their details.</span>
+              )}
             </p>
           ) : null}
         </div>
@@ -519,6 +528,7 @@ export function PlanView({ groups, plan, meta, inputs, onInput, onOpenRequests }
         <GroupsTable list={planned} plan={plan} inputs={inputs} onInput={onInput} onPick={setPicking} />
       </section>
 
+      <AnimatePresence>{showPending && meta.pending ? <PendingTours key="pending" tours={meta.pending} onClose={() => setShowPending(false)} /> : null}</AnimatePresence>
       <AnimatePresence>
         {pickingGroup ? (
           <RoomPicker

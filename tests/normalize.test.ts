@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module shared with the server
 import { isAllowedRead } from '../server/nkerp/client.mjs';
 // @ts-expect-error plain JS module shared with the server
-import { airlineOf, countGuests, endDateOf, isApprovedTour, reapprovalRow, staysFromGroupRow, withGuests } from '../server/nkerp/normalize.mjs';
+import { airlineOf, countGuests, endDateOf, isApprovedTour, pendingTour, reapprovalRow, staysFromGroupRow, withGuests } from '../server/nkerp/normalize.mjs';
 // @ts-expect-error plain JS module shared with the server
 import { runSync } from '../server/nkerp/sync.mjs';
 
@@ -121,6 +121,23 @@ describe('tours awaiting re-approval', () => {
     expect(stays).toHaveLength(1);
     expect(stays[0]).toMatchObject({ id: '5001:6', checkIn: '2026-12-01', checkOut: '2026-12-06', secondLeg: true, arrival: { kind: 'transfer', place: 'KARBALA' }, status: 'Awaiting re-approval' });
     expect(stays[0].notes.join(' ')).toMatch(/awaiting re-approval/);
+  });
+  it('describes a pending tour for the pending table', () => {
+    const row = tourRow({ Status: 'Pending', StartDate: '2026-11-26T18:00:00', EndDate: '2026-12-06T01:00:00', EntryPort: 'Baghdad Airport', ExitPort: 'Baghdad Airport', PaxCount: 50 });
+    const t = pendingTour(row, { IsReApproval: false, PaxNotRequiredAcc: 14, PaxRequiredAcc: 36, Remarks: 'Tour has been updated', TourSubvenuePlan: plans });
+    expect(t).toMatchObject({
+      tourNo: '9001',
+      status: 'Pending',
+      start: '2026-11-26',
+      end: '2026-12-06',
+      route: 'Karbala → Najaf',
+      najaf: [{ checkIn: '2026-12-01', checkOut: '2026-12-06' }],
+      pax: 50,
+      needHotel: 14,
+      housed: 36,
+      remarks: 'Tour has been updated',
+    });
+    expect(pendingTour(tourRow({ Status: 'Pending' }), null)).toMatchObject({ najaf: [], needHotel: null, route: '' });
   });
   it('leaves out a pending tour that was never approved', () => {
     expect(reapprovalRow(pendingRow, { IsReApproval: false, TourSubvenuePlan: plans })).toBeNull();

@@ -1614,6 +1614,40 @@ button {
   color: var(--ink-3);
 }
 
+/* Pending tours */
+
+.drawer.xwide {
+  width: min(1180px, 100vw);
+}
+
+.drawer.xwide .sheet-wrap {
+  margin: 0 0 24px;
+}
+
+.sheet.pending tr[data-quiet='true'] > * {
+  color: var(--ink-3);
+}
+
+.sheet.pending .route {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+.sheet.pending .muted {
+  color: var(--ink-3);
+}
+
+.sheet.pending .ports {
+  white-space: normal;
+  min-width: 150px;
+}
+
+.overview-note .linkish {
+  color: var(--araf-ink);
+  text-decoration-color: color-mix(in srgb, var(--araf) 50%, transparent);
+}
+
 /* Choosing rooms by hand */
 
 .sheet .room-nos .room-list {
