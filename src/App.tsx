@@ -112,6 +112,7 @@ export function App() {
       const next: GroupInput = { ...all[key], ...patch };
       if (!next.spec?.trim()) delete next.spec;
       if (!next.pin) delete next.pin;
+      if (!next.roomNos?.length) delete next.roomNos;
       if (!next.message || !next.spec) delete next.message;
       const copy = { ...all };
       if (Object.keys(next).length) copy[key] = next;

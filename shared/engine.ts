@@ -19,8 +19,10 @@
  *    set for the whole stay the whole group goes to Araf and the Ruya rooms
  *    stay empty. The reason is recorded as either "room-mix" (beds were
  *    there, the rooms were not) or "ruya-full" (not enough beds).
- * 7. A person can keep a group in a chosen hotel. That choice is honoured
- *    even when it overbooks the hotel, and is flagged.
+ * 7. A person can keep a group in a chosen hotel, or give it exact Ruya
+ *    rooms. Those choices go first and are honoured even when they do not
+ *    fit; a clash or a short room is flagged. Everyone else is planned
+ *    around them.
  * 8. The opening balance (who is already in house on the first night) is
  *    booked first, in its exact Ruya rooms when they are given. Groups that
  *    reached Najaf before the planning start are covered by it, so they are
@@ -151,6 +153,27 @@ class Ruya {
   roomsByLabel(labels: readonly string[], nights: string[]): RoomState[] {
     const wanted = new Set(labels.map((l) => l.trim()));
     return this.freeRooms(nights).filter((room) => wanted.has(room.label));
+  }
+
+  /**
+   * Rooms chosen by hand. Rooms that are free on every night are returned;
+   * the rest are reported as unknown (not in the plan) or clashing.
+   */
+  chosen(labels: readonly string[], nights: string[]): { rooms: RoomState[]; unknown: string[]; clashes: { label: string; night: string }[] } {
+    const rooms: RoomState[] = [];
+    const unknown: string[] = [];
+    const clashes: { label: string; night: string }[] = [];
+    for (const label of new Set(labels.map((l) => l.trim()).filter(Boolean))) {
+      const room = this.rooms.find((r) => r.label === label);
+      if (!room) {
+        unknown.push(label);
+        continue;
+      }
+      const night = nights.find((n) => room.taken.has(n));
+      if (night) clashes.push({ label, night });
+      else rooms.push(room);
+    }
+    return { rooms, unknown, clashes };
   }
 
   /** Picks concrete rooms for a list of bed sizes, or says which size ran short. */
@@ -321,8 +344,9 @@ export function buildPlan({ groups, inputs, settings, holds = [], from, to, star
       return { group, nights, input, parsed };
     })
     .sort((a, b) => {
-      const pinA = a.input.pin ? 0 : 1;
-      const pinB = b.input.pin ? 0 : 1;
+      // Rooms chosen by hand first, then hotels chosen by hand, then everyone else.
+      const pinA = a.input.roomNos?.length ? 0 : a.input.pin ? 1 : 2;
+      const pinB = b.input.roomNos?.length ? 0 : b.input.pin ? 1 : 2;
       return (
         pinA - pinB ||
         a.group.checkIn.localeCompare(b.group.checkIn) ||
@@ -351,6 +375,33 @@ export function buildPlan({ groups, inputs, settings, holds = [], from, to, star
 
     if (!nights.length) {
       placements[group.id] = base(group.id, nights, { ...common, hotel: 'ruya', detail: 'Arrives and leaves the same day: no night to book.' });
+      continue;
+    }
+
+    // A person chose the Ruya rooms.
+    if (input.roomNos?.length && ruya.byRooms) {
+      const { rooms, unknown, clashes } = ruya.chosen(input.roomNos, nights);
+      ruya.book(group.pax, nights, rooms);
+      const beds = rooms.reduce((sum, r) => sum + r.beds, 0);
+      const problems = [
+        ...unknown.map((label) => `Room ${label} is not in the plan.`),
+        ...clashes.map(({ label, night }) => `Room ${label} is already taken on ${dayMonth(night)}.`),
+        ...(beds < group.pax ? [`These rooms sleep ${beds}, the group is ${group.pax}.`] : []),
+      ];
+      const chosen = rooms.map((r) => r.beds).sort((a, b) => b - a);
+      const differs = spec && chosen.join() !== spec.join();
+      placements[group.id] = base(group.id, nights, {
+        ...common,
+        hotel: 'ruya',
+        reason: 'pinned',
+        detail: problems.length ? `Rooms chosen by hand. ${problems.join(' ')}` : 'Rooms chosen by hand.',
+        rooms: toRooms(rooms),
+        spec: chosen,
+        specSource: 'manual',
+        specIssue: differs ? `The rooms chosen by hand are not the rooms asked for (${describeRooms(spec)}).` : null,
+        beds,
+        overbooked: problems.length > 0,
+      });
       continue;
     }
 

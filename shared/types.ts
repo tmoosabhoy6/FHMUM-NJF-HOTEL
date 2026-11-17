@@ -93,6 +93,8 @@ export interface GroupInput {
   message?: { hotelPax: number | null; from: string | null; to: string | null; leader: string | null };
   /** Keep this group in a chosen hotel instead of letting the planner decide. */
   pin?: HotelId | null;
+  /** Exact Ruya room numbers chosen by hand. Puts the group in Ruya in these rooms. */
+  roomNos?: string[];
 }
 
 /** Guests already in a hotel that the pull does not cover (the opening balance). */
@@ -134,7 +136,8 @@ export interface Placement {
   rooms: Room[];
   /** Bed counts asked for, largest first. Null when nothing was typed. */
   spec: number[] | null;
-  specSource: 'typed' | 'suggested' | 'none';
+  /** Where the rooms came from: typed or pasted request, the planner's suggestion, or chosen by hand. */
+  specSource: 'typed' | 'suggested' | 'manual' | 'none';
   /** Beds blocked in Ruya (can exceed pax when a bed stays empty). */
   beds: number;
   /** A pinned group that does not actually fit. */

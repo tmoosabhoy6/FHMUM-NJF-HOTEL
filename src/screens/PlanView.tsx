@@ -1,10 +1,11 @@
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { Fragment, useMemo, useState, type CSSProperties } from 'react';
 import { OPENING_BALANCE, RUYA_SHEET } from '../../shared/config';
 import { dayLabel, dayMonth, daysBetween, fullDate, rangeLabel } from '../../shared/dates';
 import { HOTEL_NAME, HOTEL_ORDER, REASON_LABEL } from '../../shared/engine';
 import { describeRooms, parseRoomSpec } from '../../shared/roomSpec';
 import type { DayRow, Group, GroupInput, HotelId, Placement, Plan, PullMeta } from '../../shared/types';
+import { RoomPicker } from '../components/RoomPicker';
 import { guests, groupsText, nightsText, Num, tint } from '../components/ui';
 
 interface Props {
@@ -345,7 +346,7 @@ function notesFor(group: Group, placement: Placement | undefined, input: GroupIn
   return notes;
 }
 
-function GroupsTable({ list, plan, inputs, onInput }: { list: Group[]; plan: Plan; inputs: Props['inputs']; onInput: Props['onInput'] }) {
+function GroupsTable({ list, plan, inputs, onInput, onPick }: { list: Group[]; plan: Plan; inputs: Props['inputs']; onInput: Props['onInput']; onPick: (groupId: string) => void }) {
   return (
     <div className="sheet-wrap">
       <table className="sheet groups">
@@ -392,10 +393,15 @@ function GroupsTable({ list, plan, inputs, onInput }: { list: Group[]; plan: Pla
                   </label>
                   <select
                     id={`pin-${group.id}`}
-                    value={input.pin ?? ''}
-                    onChange={(e) => onInput(group.tourNo, { pin: (e.target.value || null) as HotelId | null })}
+                    value={input.roomNos?.length ? 'rooms' : (input.pin ?? '')}
+                    onChange={(e) => {
+                      if (e.target.value === 'rooms') return onPick(group.id);
+                      // Choosing a hotel replaces any rooms chosen by hand.
+                      onInput(group.tourNo, { pin: (e.target.value || null) as HotelId | null, roomNos: undefined });
+                    }}
                   >
-                    <option value="">{hotel ? HOTEL_NAME[hotel] : 'Not planned'}</option>
+                    {input.roomNos?.length ? <option value="rooms">Ruya, rooms by hand</option> : null}
+                    <option value="">{hotel && !input.roomNos?.length ? HOTEL_NAME[hotel] : 'Let the planner decide'}</option>
                     {HOTEL_ORDER.map((h) => (
                       <option key={h} value={h}>
                         Keep in {HOTEL_NAME[h]}
@@ -406,7 +412,13 @@ function GroupsTable({ list, plan, inputs, onInput }: { list: Group[]; plan: Pla
                 <td className="rooms">
                   <RoomsCell group={group} input={input} placement={placement} onInput={onInput} />
                 </td>
-                <td className="room-nos">{placement?.rooms.map((r) => r.label).join(', ') || ''}</td>
+                <td className="room-nos">
+                  {placement?.rooms.length ? <span className="room-list">{placement.rooms.map((r) => r.label).join(', ')}</span> : null}
+                  {placement?.specSource === 'manual' ? <span className="by-hand">by hand</span> : null}
+                  <button type="button" className="pick-btn" onClick={() => onPick(group.id)}>
+                    {input.roomNos?.length ? 'Change rooms' : 'Choose rooms'}
+                  </button>
+                </td>
                 <td className="notes">
                   {notes.map((n) => (
                     <span key={n.text} className="note" data-warn={n.warn}>
@@ -432,6 +444,8 @@ export function PlanView({ groups, plan, meta, inputs, onInput, onOpenRequests }
   const planned = groups.filter((g) => !before.has(g.id) && g.pax > 0);
   const { totals } = plan;
   const asked = planned.filter((g) => inputs[g.id]?.spec?.trim()).length;
+  const [picking, setPicking] = useState<string | null>(null);
+  const pickingGroup = picking ? byId.get(picking) : undefined;
   const otherNights = plan.days.filter((d) => d.hotels.araf.pax + d.hotels.c.pax > 0).length;
 
   if (!planned.length) {
@@ -498,12 +512,25 @@ export function PlanView({ groups, plan, meta, inputs, onInput, onOpenRequests }
             <button className="linkish" onClick={onOpenRequests}>
               Paste room requests
             </button>{' '}
-            or type them as bed size × rooms (2x6 is six 2-bed rooms).
+            or type them as bed size × rooms (2x6 is six 2-bed rooms). “Choose rooms” picks exact Ruya rooms by hand.
           </p>
         </div>
-        <GroupsTable list={planned} plan={plan} inputs={inputs} onInput={onInput} />
+        <GroupsTable list={planned} plan={plan} inputs={inputs} onInput={onInput} onPick={setPicking} />
       </section>
 
+      <AnimatePresence>
+        {pickingGroup ? (
+          <RoomPicker
+            key={pickingGroup.id}
+            group={pickingGroup}
+            plan={plan}
+            groups={groups}
+            current={inputs[pickingGroup.id]?.roomNos}
+            onSave={(roomNos) => onInput(pickingGroup.tourNo, { roomNos, pin: null })}
+            onClose={() => setPicking(null)}
+          />
+        ) : null}
+      </AnimatePresence>
     </main>
   );
 }

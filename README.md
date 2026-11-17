@@ -77,7 +77,10 @@ Bed size first, then rooms, as the team writes them:
   whole group goes to Araf and the reason is flagged as either **rooms not
   available in Ruya** (the beds were there, the rooms were not) or **Ruya is
   full** (not enough beds). With no request, the tightest set of rooms is used.
-- Staff can keep a group in a chosen hotel; it is flagged if it does not fit.
+- Staff can keep a group in a chosen hotel, or choose its exact Ruya rooms
+  ("Choose rooms" in the Groups table). Rooms chosen by hand go first and
+  everyone else is planned around them; a clash, a room not in the plan or
+  too few beds is flagged.
 - The plan starts on 1 Dec. Groups that reached Najaf earlier are covered by
   the opening balance (rooms 109, 110, 201 and 202), so they are left out of
   the plan.

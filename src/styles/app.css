@@ -1566,6 +1566,160 @@ button {
   color: var(--ink-3);
 }
 
+/* Choosing rooms by hand */
+
+.sheet .room-nos .room-list {
+  display: block;
+}
+
+.by-hand {
+  display: inline-block;
+  margin-top: 2px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--ruya-soft);
+  color: var(--ruya-ink);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.pick-btn {
+  display: block;
+  white-space: nowrap;
+  margin-top: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--line);
+}
+
+.pick-btn:hover {
+  color: var(--ruya-ink);
+  text-decoration-color: currentColor;
+}
+
+.pick {
+  width: 62px;
+  min-height: 56px;
+  padding: 5px 0;
+  display: grid;
+  align-content: center;
+  gap: 1px;
+  text-align: center;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  transition: transform 0.15s var(--ease), background 0.15s, border-color 0.15s;
+}
+
+.pick:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--ruya);
+}
+
+.pick b {
+  font-size: 14px;
+}
+
+.pick span {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+.pick .pick-who {
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.pick[data-soft='true'] {
+  border-style: dashed;
+  border-color: var(--araf);
+}
+
+.pick[data-fixed='true'] {
+  background: var(--sunk);
+  border-color: transparent;
+  color: var(--ink-3);
+}
+
+.pick[data-out='true'] {
+  background:
+    linear-gradient(to top right, transparent calc(50% - 0.75px), var(--ink-3) 50%, transparent calc(50% + 0.75px)),
+    linear-gradient(to bottom right, transparent calc(50% - 0.75px), var(--ink-3) 50%, transparent calc(50% + 0.75px)),
+    var(--surface);
+  color: var(--ink-3);
+}
+
+.pick:disabled {
+  cursor: not-allowed;
+}
+
+.pick[data-on='true'] {
+  background: var(--ruya);
+  border: 1px solid var(--ruya);
+  color: #fff;
+}
+
+.pick[data-on='true'] span,
+.pick[data-on='true'] .pick-who {
+  color: #dff2ef;
+}
+
+.pick-key {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
+.pick-key i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 5px;
+  border-radius: 3px;
+  vertical-align: -1px;
+  border: 1px solid var(--line);
+}
+
+.pick-key .k-soft {
+  border: 1px dashed var(--araf);
+}
+
+.pick-key .k-fixed {
+  background: var(--sunk);
+  border-color: transparent;
+}
+
+.pick-foot p b {
+  color: var(--ruya-ink);
+}
+
+.pick-foot .pick-warn {
+  color: var(--araf-ink);
+  font-weight: 600;
+}
+
+.pick-foot .pick-note {
+  color: var(--ink-2);
+}
+
+.pick-foot .pick-small {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+
 /* Room requests */
 
 .paste {

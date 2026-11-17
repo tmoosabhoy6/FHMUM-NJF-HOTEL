@@ -337,3 +337,42 @@ describe('Ruya as it really is', () => {
     expect(kept.days[0].hotels.araf.pax).toBe(18);
   });
 });
+
+describe('Ruya rooms chosen by hand', () => {
+  it('puts the group in exactly those rooms and plans everyone else around them', () => {
+    const picked = group({ id: 'picked', pax: 8, checkIn: '2026-12-03', checkOut: '2026-12-06' });
+    const auto = group({ id: 'auto', pax: 4, checkIn: '2026-12-01', checkOut: '2026-12-08', tourNo: '9' }); // arrives first, but hand-picked rooms come first
+    const plan = buildPlan({
+      groups: [auto, picked],
+      inputs: { picked: { roomNos: ['101', '102'] }, auto: { spec: '4x1' } },
+      settings: DEFAULT_SETTINGS,
+      from: PLANNING_START,
+    });
+    expect(plan.placements.picked).toMatchObject({ hotel: 'ruya', reason: 'pinned', specSource: 'manual', overbooked: false });
+    expect(plan.placements.picked.rooms.map((r) => r.label)).toEqual(['101', '102']);
+    expect(plan.placements.auto.hotel).toBe('ruya');
+    expect(plan.placements.auto.rooms.map((r) => r.label)).not.toContain('101');
+    expect(plan.placements.auto.rooms.map((r) => r.label)).not.toContain('102');
+  });
+  it('flags a clash with the opening balance, a room not in the plan, and too few beds', () => {
+    const g = group({ id: 'g', pax: 10, checkIn: '2026-12-01', checkOut: '2026-12-03' });
+    const plan = buildPlan({
+      groups: [g],
+      inputs: { g: { roomNos: ['109', '310', '103'] } },
+      settings: DEFAULT_SETTINGS,
+      holds: OPENING_BALANCE,
+      from: PLANNING_START,
+    });
+    const p = plan.placements.g;
+    expect(p.overbooked).toBe(true);
+    expect(p.rooms.map((r) => r.label)).toEqual(['103']);
+    expect(p.detail).toMatch(/Room 310 is not in the plan/);
+    expect(p.detail).toMatch(/Room 109 is already taken on 1 Dec/);
+    expect(p.detail).toMatch(/sleep 3, the group is 10/);
+  });
+  it('says when the chosen rooms differ from the request', () => {
+    const g = group({ id: 'g', pax: 8, checkIn: '2026-12-05', checkOut: '2026-12-07' });
+    const plan = buildPlan({ groups: [g], inputs: { g: { spec: '2x4', roomNos: ['101', '102'] } }, settings: DEFAULT_SETTINGS, from: PLANNING_START });
+    expect(plan.placements.g.specIssue).toMatch(/not the rooms asked for/);
+  });
+});
