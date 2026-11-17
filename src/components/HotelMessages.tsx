@@ -5,6 +5,9 @@ import { HOTEL_ORDER } from '../../shared/engine';
 import { hotelMessage, type HotelMessage } from '../../shared/messages';
 import type { Group, HotelId, Plan } from '../../shared/types';
 import { useNames } from '../lib/names';
+import { load, save } from '../lib/storage';
+
+const KIND_KEY = 'njf.messageKind.v1';
 
 interface Props {
   groups: Group[];
@@ -40,6 +43,8 @@ export function HotelMessages({ groups, plan, pending, onRefresh, onClose }: Pro
   const names = useNames();
   const [hotel, setHotel] = useState<HotelId | 'all'>('all');
   const [copied, setCopied] = useState<string | null>(null);
+  const [kind, setKind] = useState<'plain' | 'rooms'>(() => (load<string>(KIND_KEY, 'plain') === 'rooms' ? 'rooms' : 'plain'));
+  useEffect(() => save(KIND_KEY, kind), [kind]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -50,13 +55,13 @@ export function HotelMessages({ groups, plan, pending, onRefresh, onClose }: Pro
     const list: Item[] = [];
     for (const g of groups) {
       const p = plan.placements[g.id];
-      const m = p ? hotelMessage(g, p) : null;
+      const m = p ? hotelMessage(g, p, { roomNumbers: kind === 'rooms' }) : null;
       if (p && m) list.push({ ...m, hotel: p.hotel, leader: g.leader });
     }
     return list.sort(
       (a, b) => a.from.localeCompare(b.from) || HOTEL_ORDER.indexOf(a.hotel) - HOTEL_ORDER.indexOf(b.hotel) || a.tourNo.localeCompare(b.tourNo, undefined, { numeric: true }),
     );
-  }, [groups, plan]);
+  }, [groups, plan, kind]);
   const shown = hotel === 'all' ? items : items.filter((m) => m.hotel === hotel);
   const byDate = useMemo(() => {
     const map = new Map<string, Item[]>();
@@ -102,6 +107,19 @@ export function HotelMessages({ groups, plan, pending, onRefresh, onClose }: Pro
                 first so the messages include them.
               </p>
             ) : null}
+            <div className="msg-kind" role="radiogroup" aria-label="Message type">
+              {(
+                [
+                  ['plain', 'Requirements only', 'Bed sizes and number of rooms'],
+                  ['rooms', 'With room numbers', 'Adds the rooms planned for each line'],
+                ] as const
+              ).map(([id, label, hint]) => (
+                <button key={id} type="button" role="radio" aria-checked={kind === id} className="kind" onClick={() => setKind(id)}>
+                  <b>{label}</b>
+                  <span>{hint}</span>
+                </button>
+              ))}
+            </div>
             <div className="msg-filter" role="group" aria-label="Hotel">
               {(['all', ...HOTEL_ORDER] as const).map((id) => {
                 const count = id === 'all' ? items.length : items.filter((m) => m.hotel === id).length;
@@ -143,6 +161,9 @@ export function HotelMessages({ groups, plan, pending, onRefresh, onClose }: Pro
                         </button>
                       </div>
                       {m.rooms ? null : <p className="msg-warn">No rooms yet: type or choose them in the Groups table, then refresh the plan.</p>}
+                      {kind === 'rooms' && m.rooms && !m.numbered ? (
+                        <p className="msg-note">No room numbers: the plan only numbers {names.ruya} rooms.</p>
+                      ) : null}
                       <pre className="msg-text">{m.text}</pre>
                     </article>
                   ))}

@@ -347,3 +347,16 @@ describe('hotel messages', () => {
     expect(message.text).toContain(' To be confirmed');
   });
 });
+
+describe('hotel messages with room numbers', () => {
+  it('adds the planned room numbers to each room line', () => {
+    const g = group({ id: 'n', tourNo: '2218', leader: 'Lead', pax: 7, checkIn: '2026-12-05', checkOut: '2026-12-07' });
+    const plan = buildPlan({ groups: [g], inputs: { n: { roomNos: ['106', '107', '103'] } }, settings: DEFAULT_SETTINGS, from: '2026-12-05' });
+    const plain = hotelMessage(g, plan.placements.n)!;
+    const numbered = hotelMessage(g, plan.placements.n, { roomNumbers: true })!;
+    expect(plain.text).toContain(' 02 beds x   02 Rooms = 04 beds\n 03 beds x   01 Rooms = 03 beds\n');
+    expect(numbered.numbered).toBe(true);
+    expect(numbered.text).toContain(' 02 beds x   02 Rooms = 04 beds - Room no. 106, 107\n 03 beds x   01 Rooms = 03 beds - Room no. 103\n');
+    expect(numbered.text.replace(/ - Room no\. [\d, ]+/g, '')).toBe(plain.text);
+  });
+});

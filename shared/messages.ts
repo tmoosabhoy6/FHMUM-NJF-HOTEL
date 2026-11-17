@@ -15,6 +15,9 @@
  *    04 beds x   02 Rooms = 08 beds
  *
  *   TOTAL- 23 BEDS
+ *
+ * With room numbers, each room line ends with the rooms planned for it:
+ *    02 beds x   06 Rooms = 12 beds - Room no. 106, 107, 110, 205, 206, 210
  */
 import { addDays } from './dates';
 import { groupRooms } from './roomSpec';
@@ -33,6 +36,8 @@ export interface HotelMessage {
   nights: number;
   /** Room sizes in the message, or null when the group has no rooms yet. */
   rooms: number[] | null;
+  /** True when the message lists room numbers (only rooms the plan gave the group have numbers). */
+  numbered: boolean;
   text: string;
 }
 
@@ -41,7 +46,7 @@ export interface HotelMessage {
  * (the departure day included when that rule applies) and its rooms (the
  * Ruya rooms it was given, else the rooms typed for it).
  */
-export function hotelMessage(group: Group, placement: Placement): HotelMessage | null {
+export function hotelMessage(group: Group, placement: Placement, { roomNumbers = false }: { roomNumbers?: boolean } = {}): HotelMessage | null {
   const nights = placement.nights;
   if (!nights.length) return null;
   const from = nights[0];
@@ -58,13 +63,19 @@ export function hotelMessage(group: Group, placement: Placement): HotelMessage |
     'Room Requirement:',
     '',
   ];
+  const numbered = roomNumbers && placement.rooms.length > 0;
   if (rooms) {
     for (const { beds, count } of groupRooms(rooms)) {
-      lines.push(` ${two(beds)} beds x   ${two(count)} Rooms = ${two(beds * count)} beds`);
+      const line = ` ${two(beds)} beds x   ${two(count)} Rooms = ${two(beds * count)} beds`;
+      const labels = placement.rooms
+        .filter((r) => r.beds === beds)
+        .map((r) => r.label)
+        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      lines.push(numbered && labels.length ? `${line} - Room no. ${labels.join(', ')}` : line);
     }
     lines.push('', `TOTAL- ${rooms.reduce((sum, b) => sum + b, 0)} BEDS`);
   } else {
     lines.push(' To be confirmed', '', `TOTAL- ${group.pax} BEDS`);
   }
-  return { groupId: group.id, tourNo: group.tourNo, from, to, nights: nights.length, rooms, text: lines.join('\n') };
+  return { groupId: group.id, tourNo: group.tourNo, from, to, nights: nights.length, rooms, numbered, text: lines.join('\n') };
 }
