@@ -1,5 +1,5 @@
 import { runSample } from '../../shared/sample';
-import type { Group, PullMeta } from '../../shared/types';
+import type { Group, PullMeta, Venue } from '../../shared/types';
 
 
 export type ServerState = 'checking' | 'ready' | 'no-login' | 'no-server';
@@ -41,6 +41,9 @@ export const STEP_TITLE: Record<StepId, string> = {
   match: 'Build the stays',
 };
 
+/** Step titles for a pull of `venue`. */
+export const stepTitle = (id: StepId, venue: Venue = 'najaf') => (id === 'tours' && venue === 'karbala' ? 'Approved Karbala tours' : STEP_TITLE[id]);
+
 export const emptyProgress = (): PullProgress => ({
   steps: {
     signin: { status: 'waiting', detail: '' },
@@ -61,10 +64,11 @@ interface Handlers {
 }
 
 /** Starts a pull and streams its progress. Returns a function that cancels it. */
-export function startPull(params: { from: string; to: string | null; source: 'nkerp' | 'sample' }, handlers: Handlers): () => void {
+export function startPull(params: { from: string; to: string | null; source: 'nkerp' | 'sample'; venue?: Venue }, handlers: Handlers): () => void {
   if (params.source === 'sample') return startSample(params, handlers);
   const query = new URLSearchParams({ from: params.from });
   if (params.to) query.set('to', params.to);
+  if (params.venue === 'karbala') query.set('venue', 'karbala');
   const stream = new EventSource(`/api/sync?${query}`);
   let finished = false;
   const on = <T,>(name: string, fn: (data: T) => void) =>

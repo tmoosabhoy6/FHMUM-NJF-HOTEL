@@ -38,6 +38,8 @@ function json(res, status, body) {
 async function handleSync(req, res, url) {
   const from = url.searchParams.get('from') ?? '';
   const to = url.searchParams.get('to') || null;
+  const venue = url.searchParams.get('venue') || 'najaf';
+  if (venue !== 'najaf' && venue !== 'karbala') return json(res, 400, { error: 'Unknown city' });
   if (!ISO_DATE.test(from) || (to && !ISO_DATE.test(to)) || (to && to < from)) {
     return json(res, 400, { error: 'Choose a start date, and an end date that is not before it.' });
   }
@@ -54,7 +56,7 @@ async function handleSync(req, res, url) {
   };
   const beat = setInterval(() => !res.writableEnded && res.write(': keep-alive\n\n'), 15_000);
   try {
-    const result = await runSync({ client: sharedClient(), from, to, office: OFFICE, emit, signal: abort.signal });
+    const result = await runSync({ client: sharedClient(), from, to, venue, office: OFFICE, emit, signal: abort.signal });
     emit('done', result);
   } catch (error) {
     if (!abort.signal.aborted) {

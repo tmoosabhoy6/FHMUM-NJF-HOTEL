@@ -6,13 +6,15 @@ import { buildPlan, hotelNames } from '../shared/engine';
 import type { Group, GroupInput, PullMeta, Settings } from '../shared/types';
 import { HotelMessages } from './components/HotelMessages';
 import { SettingsDrawer, type Prefs } from './components/SettingsDrawer';
-import { Brand } from './components/ui';
+import { Brand, CityTabs } from './components/ui';
 import { exportPlan } from './lib/export';
 import { inputKey } from './lib/inputs';
+import { useKarbala } from './lib/karbala';
 import { NamesContext } from './lib/names';
 import { SharedState, type SaveStatus, type Values } from './lib/shared';
 import { load, remove, save } from './lib/storage';
 import { checkServer, emptyProgress, startPull, type PullProgress, type ServerState } from './lib/sync';
+import { KarbalaView } from './screens/Karbala';
 import { Night } from './screens/Night';
 import { PlanView } from './screens/PlanView';
 
@@ -23,7 +25,7 @@ interface Dataset {
 
 // v2: guests are counted person by person, and room requests are written bed size first.
 // Local copies only: the shared copy everyone sees is on the server (lib/shared.ts).
-const KEY = { data: 'njf.dataset.v2', inputs: 'njf.inputs.v2', applied: 'njf.applied.v2', prefs: 'njf.prefs.v2', range: 'njf.range.v2', merged: 'njf.shared.v1' };
+const KEY = { data: 'njf.dataset.v2', inputs: 'njf.inputs.v2', applied: 'njf.applied.v2', prefs: 'njf.prefs.v2', range: 'njf.range.v2', merged: 'njf.shared.v1', tab: 'fh.tab.v1' };
 const POLL_MS = 15_000;
 
 const DEFAULT_PREFS: Prefs = { arafCapacity: 100, departureDayRule: true, withheld: RUYA_WITHHELD };
@@ -57,6 +59,12 @@ export function App() {
   const [shared] = useState(() => new SharedState());
   const [loaded, setLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+  // Which city is open (per device). Karbala is the message generator only (screens/Karbala.tsx).
+  const [tab, setTab] = useState<'najaf' | 'karbala'>(() => (load<string>(KEY.tab, 'najaf') === 'karbala' ? 'karbala' : 'najaf'));
+  useEffect(() => save(KEY.tab, tab), [tab]);
+  const karbala = useKarbala(shared, loaded, range);
+  const karbalaApply = useRef(karbala.apply);
+  karbalaApply.current = karbala.apply;
   // The latest values, for the poll and for typing (which works from the current room requests).
   const latest = useRef({ dataset, typed, applied, prefs, range, screen });
   latest.current = { dataset, typed, applied, prefs, range, screen };
@@ -105,6 +113,7 @@ export function App() {
         if (!same(next, now.prefs)) setPrefs(next);
       }
       if ('range' in values && values.range && !shared.busy('range') && !same(values.range, now.range)) setRange(values.range as typeof now.range);
+      karbalaApply.current(values);
     };
     const first = async () => {
       let values = await shared.poll();
@@ -234,6 +243,15 @@ export function App() {
   const names = settings.names ?? hotelNames();
   const night = screen !== 'app';
   const flagged = plan?.totals.flagged ?? 0;
+  const tabs = (dark = false) => <CityTabs tab={tab} onTab={setTab} dark={dark} />;
+
+  if (tab === 'karbala') {
+    return (
+      <NamesContext.Provider value={names}>
+        <KarbalaView k={karbala} tabs={tabs()} server={server} departureDayRule={prefs.departureDayRule} saveStatus={saveStatus} loaded={loaded} ago={ago} />
+      </NamesContext.Provider>
+    );
+  }
 
   return (
     <NamesContext.Provider value={names}>
@@ -242,6 +260,7 @@ export function App() {
           <header className="app-top">
             <div className="app-top-inner">
               <Brand />
+              {tabs()}
               <div className="pulled">
                 <b>
                   From {dayMonth(dataset.meta.from)}
@@ -351,6 +370,7 @@ export function App() {
         {night ? (
           <Night
             key="night"
+            tabs={tabs(true)}
             mode={screen === 'pulling' ? 'pulling' : screen === 'failed' ? 'failed' : 'start'}
             from={range.from}
             to={range.to}

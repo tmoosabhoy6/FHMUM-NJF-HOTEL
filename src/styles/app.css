@@ -2149,3 +2149,227 @@ button {
   font-weight: 400;
   color: var(--ink-3);
 }
+
+/* ───────────────────────────── City tabs ───────────────────────────── */
+
+.city-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--sunk);
+  flex: none;
+}
+
+.city-tabs button {
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-2);
+  font-weight: 650;
+  font-size: 13.5px;
+  transition: background 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.city-tabs button:hover {
+  color: var(--ink);
+}
+
+.city-tabs button[aria-current='page'] {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(19, 35, 59, 0.18);
+}
+
+.city-tabs[data-dark='true'] {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.city-tabs[data-dark='true'] button {
+  color: var(--night-ink-2);
+}
+
+.city-tabs[data-dark='true'] button:hover {
+  color: var(--night-ink);
+}
+
+.city-tabs[data-dark='true'] button[aria-current='page'] {
+  background: var(--lamp);
+  color: #1b1503;
+  box-shadow: none;
+}
+
+.night-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+a.btn {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ───────────────────────────── Karbala tab ───────────────────────────── */
+
+.k-pull {
+  max-width: 640px;
+  margin: 10px 0 34px;
+  padding: 26px 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+  background: var(--surface);
+}
+
+.k-pull h1 {
+  font-family: var(--display);
+  font-weight: 620;
+  font-size: clamp(26px, 3vw, 34px);
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+}
+
+.k-lede {
+  margin-top: 10px;
+  color: var(--ink-2);
+  max-width: 60ch;
+}
+
+.k-form {
+  margin-top: 22px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  align-items: start;
+}
+
+.k-field {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.k-field input {
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-control);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.k-field input:focus {
+  outline: none;
+  border-color: var(--ruya);
+  box-shadow: 0 0 0 3px var(--ruya-soft);
+}
+
+.k-field small {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+
+.k-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.k-warn {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: var(--c-soft);
+  color: var(--c-ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* the pull steps, on the light page */
+.k-steps {
+  margin: 20px 0 0;
+}
+
+.k-steps .step {
+  color: var(--ink-3);
+}
+
+.k-steps .step[data-status='active'],
+.k-steps .step[data-status='done'] {
+  color: var(--ink);
+}
+
+.k-steps .step-dot {
+  border-color: var(--line);
+}
+
+.k-steps .step[data-status='active'] .step-dot {
+  border-color: var(--ruya);
+  color: var(--ruya);
+}
+
+.k-steps .step[data-status='done'] .step-dot {
+  background: var(--ruya);
+  border-color: var(--ruya);
+  color: #fff;
+}
+
+.k-steps .step-detail {
+  color: var(--ink-2);
+}
+
+.k-tally {
+  margin: 14px 0 16px;
+  color: var(--ink-2);
+}
+
+.k-tally b {
+  color: var(--ink);
+}
+
+.k-overview {
+  margin-bottom: 8px;
+}
+
+.k-depday {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.msg[data-city='karbala'] {
+  --h: var(--ruya);
+}
+
+.k-messages {
+  max-width: 760px;
+}
+
+#k-messages {
+  scroll-margin-top: 80px;
+}
+
+@media (max-width: 860px) {
+  .k-pull {
+    padding: 20px 18px;
+  }
+  .k-form {
+    grid-template-columns: 1fr;
+  }
+  .night-top {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+}

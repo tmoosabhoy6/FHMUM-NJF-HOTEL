@@ -74,6 +74,31 @@ Build): every push to `main` builds with `npm run build` and deploys with
    all" per date. Two types: requirements only, or with the planned room
    numbers on each room line (`- Room no. 106, 107`). "Download Excel" exports the plan; its "Bookings to make" sheet has one row per tour per hotel (first and last night, nights, guests, arrival and departure flight or subvenue).
 
+## Karbala tab
+
+The **Karbala** tab at the top (next to **Najaf**) is a message generator only:
+no hotels, no room plan.
+
+1. **Pull.** Pick the first night (and a last night, or leave it open). The
+   pull is the same one as Najaf's (`/api/sync?venue=karbala`): approved tours
+   with a Karbala stay in the range, guests marked "accommodation not
+   required" counted person by person (infants apart, tour totals while the
+   guest list is empty), and pending tours (including those awaiting
+   re-approval) listed under "See the pending tours" with their Karbala dates.
+2. **Groups.** One row per group: tour, group leader, guests, arrives and
+   leaves (flight and time, or "(subvenue)" for a Najaf transfer), nights, and
+   **Rooms asked for**, typed the same way as in Najaf.
+3. **Refresh messages** builds one message per group in the team's format
+   with `KARBALA (03 NIGHT)` in the heading, by check-in date, with Copy and
+   "Copy all" per date. A group with no rooms typed says "To be confirmed".
+   Nights follow Najaf's rule: the departure day counts when Karbala is the
+   second half of the trip and the group flies Iraqi Airways out of Najaf or
+   Baghdad (the same switch under "Hotels and rooms" turns it off for both).
+
+Karbala's pull, rooms and date range are saved for everyone, apart from
+Najaf's (`karbala*` keys in the same D1 table). Code: `shared/karbala.ts`,
+`src/lib/karbala.ts`, `src/screens/Karbala.tsx`.
+
 ### Typed rooms: how they are read (`shared/roomSpec.ts`)
 
 Bed size first, then rooms, as the team writes them:

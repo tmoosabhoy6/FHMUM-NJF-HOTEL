@@ -2,7 +2,7 @@
  * Cloudflare Worker: serves the built app (dist/) and the read-only NKERP API.
  *
  *   GET /api/health        is NKERP sign-in set up?
- *   GET /api/sync?from&to  the pull, streamed to the loading screen as server-sent events
+ *   GET /api/sync?from&to&venue  the pull (venue najaf or karbala), streamed to the loading screen as server-sent events
  *   /api/state             the app's shared saved state, in D1 (server/state.mjs)
  *
  * The NKERP login comes from the Worker's secrets NKERP_LOGIN_ID and
@@ -20,6 +20,8 @@ const json = (status, body) =>
 function sync(url, env, ctx) {
   const from = url.searchParams.get('from') ?? '';
   const to = url.searchParams.get('to') || null;
+  const venue = url.searchParams.get('venue') || 'najaf';
+  if (venue !== 'najaf' && venue !== 'karbala') return json(400, { error: 'Unknown city' });
   if (!ISO_DATE.test(from) || (to && !ISO_DATE.test(to)) || (to && to < from)) {
     return json(400, { error: 'Choose a start date, and an end date that is not before it.' });
   }
@@ -46,6 +48,7 @@ function sync(url, env, ctx) {
         client: sharedClient(env),
         from,
         to,
+        venue,
         office: env.NKERP_OFFICE_NAME || DEFAULT_OFFICE,
         emit,
         signal: abort.signal,

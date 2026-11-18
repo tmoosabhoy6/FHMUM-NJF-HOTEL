@@ -41,33 +41,42 @@ export interface HotelMessage {
   text: string;
 }
 
-/**
- * The message for one group, from its plan: the nights it sleeps in Najaf
- * (the departure day included when that rule applies) and its rooms (the
- * Ruya rooms it was given, else the rooms typed for it).
- */
-export function hotelMessage(group: Group, placement: Placement, { roomNumbers = false }: { roomNumbers?: boolean } = {}): HotelMessage | null {
-  const nights = placement.nights;
+interface MessageParts {
+  groupId: string;
+  tourNo: string;
+  leader: string;
+  pax: number;
+  /** City in the heading: "NAJAF (05 NIGHT)", "KARBALA (03 NIGHT)". */
+  city: string;
+  /** Every night the group sleeps there, in order. */
+  nights: string[];
+  /** Bed count of each room, or null when no rooms are known yet. */
+  rooms: number[] | null;
+  /** Rooms with numbers, listed on each room line when given. */
+  numberedRooms?: { beds: number; label: string }[];
+}
+
+/** One message in the team's format. Null when the group has no nights. */
+export function roomMessage({ groupId, tourNo, leader, pax, city, nights, rooms, numberedRooms = [] }: MessageParts): HotelMessage | null {
   if (!nights.length) return null;
   const from = nights[0];
   const to = addDays(nights[nights.length - 1], 1);
-  const rooms = placement.rooms.length ? placement.rooms.map((r) => r.beds) : placement.spec?.length ? placement.spec : null;
   const lines = [
-    `Tour id -${group.tourNo}`,
-    `GL -  ${(group.leader || '').toUpperCase()}`.trimEnd(),
-    `Hotel pax - ${group.pax}`,
+    `Tour id -${tourNo}`,
+    `GL -  ${(leader || '').toUpperCase()}`.trimEnd(),
+    `Hotel pax - ${pax}`,
     '',
-    `NAJAF (${two(nights.length)} NIGHT)`,
+    `${city} (${two(nights.length)} NIGHT)`,
     `${dmy(from)} TO ${dmy(to)}`,
     '',
     'Room Requirement:',
     '',
   ];
-  const numbered = roomNumbers && placement.rooms.length > 0;
+  const numbered = numberedRooms.length > 0;
   if (rooms) {
     for (const { beds, count } of groupRooms(rooms)) {
       const line = ` ${two(beds)} beds x   ${two(count)} Rooms = ${two(beds * count)} beds`;
-      const labels = placement.rooms
+      const labels = numberedRooms
         .filter((r) => r.beds === beds)
         .map((r) => r.label)
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
@@ -75,7 +84,35 @@ export function hotelMessage(group: Group, placement: Placement, { roomNumbers =
     }
     lines.push('', `TOTAL- ${rooms.reduce((sum, b) => sum + b, 0)} BEDS`);
   } else {
-    lines.push(' To be confirmed', '', `TOTAL- ${group.pax} BEDS`);
+    lines.push(' To be confirmed', '', `TOTAL- ${pax} BEDS`);
   }
-  return { groupId: group.id, tourNo: group.tourNo, from, to, nights: nights.length, rooms, numbered, text: lines.join('\n') };
+  return { groupId, tourNo, from, to, nights: nights.length, rooms, numbered, text: lines.join('\n') };
+}
+
+/**
+ * The message for one group, from its plan: the nights it sleeps in Najaf
+ * (the departure day included when that rule applies) and its rooms (the
+ * Ruya rooms it was given, else the rooms typed for it).
+ */
+export function hotelMessage(group: Group, placement: Placement, { roomNumbers = false }: { roomNumbers?: boolean } = {}): HotelMessage | null {
+  const rooms = placement.rooms.length ? placement.rooms.map((r) => r.beds) : placement.spec?.length ? placement.spec : null;
+  return roomMessage({
+    groupId: group.id,
+    tourNo: group.tourNo,
+    leader: group.leader,
+    pax: group.pax,
+    city: 'NAJAF',
+    nights: placement.nights,
+    rooms,
+    numberedRooms: roomNumbers ? placement.rooms : [],
+  });
+}
+
+/**
+ * The message for one Karbala group: its nights in Karbala and the rooms
+ * typed for it (largest first, as parseRoomSpec gives them), or "To be
+ * confirmed" when none are typed.
+ */
+export function karbalaMessage(group: Group, nights: string[], rooms: number[] | null): HotelMessage | null {
+  return roomMessage({ groupId: group.id, tourNo: group.tourNo, leader: group.leader, pax: group.pax, city: 'KARBALA', nights, rooms: rooms?.length ? rooms : null });
 }

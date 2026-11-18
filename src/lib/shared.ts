@@ -9,7 +9,7 @@
  * overwrite each other. Other devices' changes arrive by polling.
  */
 
-export type SharedKey = 'dataset' | 'inputs' | 'applied' | 'prefs' | 'range';
+export type SharedKey = 'dataset' | 'inputs' | 'applied' | 'prefs' | 'range' | 'karbalaDataset' | 'karbalaInputs' | 'karbalaApplied' | 'karbalaRange';
 export type SaveStatus = 'saved' | 'saving' | 'offline';
 export type Values = Partial<Record<SharedKey, unknown>>;
 

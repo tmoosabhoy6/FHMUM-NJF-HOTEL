@@ -1,11 +1,11 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { Fragment, useMemo, useState, type CSSProperties } from 'react';
 import { OPENING_BALANCE, RUYA_SHEET } from '../../shared/config';
-import { clock, dayLabel, dayMonth, daysBetween, fullDate, rangeLabel } from '../../shared/dates';
+import { dayLabel, dayMonth, daysBetween, fullDate, rangeLabel } from '../../shared/dates';
 import { HOTEL_ORDER, reasonLabel } from '../../shared/engine';
 import { describeRooms, parseRoomSpec } from '../../shared/roomSpec';
 import type { DayRow, Group, GroupInput, HotelId, HotelNames, Placement, Plan, PullMeta } from '../../shared/types';
-import { bookingRows, legDetail } from '../lib/bookings';
+import { bookingRows, howText, legDetail } from '../lib/bookings';
 import { useNames } from '../lib/names';
 import { PendingTours } from '../components/PendingTours';
 import { RoomPicker } from '../components/RoomPicker';
@@ -338,13 +338,6 @@ function RoomsCell({ group, input, placement, onInput }: { group: Group; input: 
       {read ? <small>{read.text}</small> : null}
     </div>
   );
-}
-
-/** Under a date: "(subvenue)" for a transfer, else the flight code and its time. */
-function howText(leg: Group['arrival'], at: string | null): string {
-  if (leg.kind === 'transfer') return '(subvenue)';
-  if (leg.kind !== 'airport') return '';
-  return [leg.flight, clock(at)].filter(Boolean).join(', ');
 }
 
 function notesFor(group: Group, placement: Placement | undefined, names: HotelNames): { text: string; warn: boolean }[] {
