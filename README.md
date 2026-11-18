@@ -47,13 +47,13 @@ Build): every push to `main` builds with `npm run build` and deploys with
    - **General search → Groups** for the office: every tour with its status,
      ports, flights and sub-venue plans. Approved tours (Approved, Current,
      Completed) with a Najaf stay in the range go on.
-   - **Tours awaiting re-approval.** An approved tour that is updated shows as
-     Pending with no plans until NKERP re-approves it. For pending tours the
-     pull reads the tour's sub-venue plans; if it is awaiting re-approval it
-     is planned with its latest dates (marked in the Groups table). Tours that
-     were never approved are not planned; "See the pending tours" on the plan
-     lists them (trip dates, ports, Najaf dates if any, guests who will need a
-     hotel), and the Excel file has a "Pending tours" sheet.
+   - **Pending tours**, including approved tours that were updated and wait
+     for re-approval (NKERP lists them as Pending with no plans until it
+     re-approves them). They are not planned: the pull reads their sub-venue
+     plans, and "See the pending tours" on the plan lists them (status, trip
+     dates, ports, latest Najaf dates if any, guests who will need a hotel);
+     the Excel file has a "Pending tours" sheet. They join the plan by
+     themselves once NKERP approves them and the data is pulled again.
    - **Each tour's guest list**, person by person. A guest marked
      "accommodation not required" needs a bed from us, whether or not the rest
      of the tour is housed by NKERP. Cancelled, inactive and dummy guests are

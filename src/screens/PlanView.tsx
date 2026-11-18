@@ -5,6 +5,7 @@ import { clock, dayLabel, dayMonth, daysBetween, fullDate, rangeLabel } from '..
 import { HOTEL_ORDER, reasonLabel } from '../../shared/engine';
 import { describeRooms, parseRoomSpec } from '../../shared/roomSpec';
 import type { DayRow, Group, GroupInput, HotelId, HotelNames, Placement, Plan, PullMeta } from '../../shared/types';
+import { bookingRows, legDetail } from '../lib/bookings';
 import { useNames } from '../lib/names';
 import { PendingTours } from '../components/PendingTours';
 import { RoomPicker } from '../components/RoomPicker';
@@ -23,7 +24,6 @@ interface Props {
 const short = (reason: Placement['reason'] | undefined, names: HotelNames) =>
   reason === 'room-mix' || reason === 'ruya-full' || reason === 'araf-full' || reason === 'pinned' ? reasonLabel(reason, names) : '';
 
-const nightsBetween = (from: string, lastNight: string) => daysBetween(from, lastNight) + 1;
 
 // ---- summary --------------------------------------------------------------
 
@@ -262,21 +262,15 @@ function DailyTable({ plan, byId }: { plan: Plan; byId: Map<string, Group> }) {
 
 function BookingsTable({ plan, byId }: { plan: Plan; byId: Map<string, Group> }) {
   const names = useNames();
-  const rows = plan.bookings.flatMap((b) =>
-    b.steps.map((step) => ({
-      key: `${b.hotel}-${step.from}`,
-      hotel: b.hotel,
-      ...step,
-      ids: b.groupIds.filter((id) => plan.placements[id]?.nights.some((n) => n >= step.from && n <= step.lastNight)),
-    })),
-  );
+  const rows = bookingRows(plan, byId);
   if (!rows.length) return <div className="all-clear">{names.ruya} covers every night. Nothing to book at {names.araf} or {names.c}.</div>;
   return (
     <div className="sheet-wrap">
-      <table className="sheet">
+      <table className="sheet bookings">
         <thead>
           <tr>
             <th scope="col">Hotel</th>
+            <th scope="col">Tour</th>
             <th scope="col">First night</th>
             <th scope="col">Last night</th>
             <th scope="col" className="n">
@@ -285,22 +279,34 @@ function BookingsTable({ plan, byId }: { plan: Plan; byId: Map<string, Group> })
             <th scope="col" className="n">
               Guests
             </th>
-            <th scope="col">Tours</th>
+            <th scope="col">Arrival</th>
+            <th scope="col">Departure</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => (
-            <tr key={r.key}>
+          {rows.map(({ key, hotel, group, from, lastNight, nights }) => (
+            <tr key={key}>
               <td>
-                <span className="chip" data-hotel={r.hotel}>
-                  {names[r.hotel]}
+                <span className="chip" data-hotel={hotel}>
+                  {names[hotel]}
                 </span>
               </td>
-              <td>{fullDate(r.from)}</td>
-              <td>{fullDate(r.lastNight)}</td>
-              <td className="n">{nightsBetween(r.from, r.lastNight)}</td>
-              <td className="n strong">{r.pax}</td>
-              <td>{r.ids.map((id) => byId.get(id)?.tourNo).join(', ')}</td>
+              <td className="strong">
+                {group.tourNo}
+                {group.leader ? <small>{group.leader}</small> : null}
+              </td>
+              <td>{fullDate(from)}</td>
+              <td>{fullDate(lastNight)}</td>
+              <td className="n">{nights}</td>
+              <td className="n strong">{group.pax}</td>
+              <td className="when">
+                {dayMonth(group.checkIn)}
+                <small>{legDetail(group.arrival, group.arrivalAt, 'From')}</small>
+              </td>
+              <td className="when">
+                {dayMonth(group.checkOut)}
+                <small>{legDetail(group.departure, group.departureAt, 'To')}</small>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -526,7 +532,7 @@ export function PlanView({ groups, plan, meta, inputs, onInput, onOpenMessages }
       <section className="block">
         <div className="block-head">
           <h2>Bookings to make</h2>
-          <p>Every run of nights when {names.ruya} alone is not enough.</p>
+          <p>One row per tour staying in {names.araf} or {names.c}, with its nights there and its arrival and departure.</p>
         </div>
         <BookingsTable plan={plan} byId={byId} />
       </section>

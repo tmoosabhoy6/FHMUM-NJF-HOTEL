@@ -43,7 +43,7 @@ export function PendingTours({ tours, onClose }: Props) {
         <div className="drawer-body">
           <section className="set">
             <p>
-              {tours.length} {tours.length === 1 ? 'tour is' : 'tours are'} not approved in NKERP yet, so they are not in the plan.{' '}
+              {tours.length} {tours.length === 1 ? 'tour is' : 'tours are'} not approved in NKERP yet, or waiting for re-approval after a change, so they are not in the plan.{' '}
               {withGuests.length} of them {withGuests.length === 1 ? 'has' : 'have'} guests who will need a hotel ({guests} guests). They join the plan
               by themselves once approved and pulled again.
             </p>

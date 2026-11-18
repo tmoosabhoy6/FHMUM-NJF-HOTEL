@@ -139,6 +139,10 @@ describe('tours awaiting re-approval', () => {
     });
     expect(pendingTour(tourRow({ Status: 'Pending' }), null)).toMatchObject({ najaf: [], needHotel: null, route: '' });
   });
+  it('lists a tour awaiting re-approval as pending, with its latest Najaf dates', () => {
+    const t = pendingTour(pendingRow, { IsReApproval: true, PaxNotRequiredAcc: 15, PaxRequiredAcc: 0, TourSubvenuePlan: plans });
+    expect(t).toMatchObject({ status: 'Awaiting re-approval', reapproval: true, najaf: [{ checkIn: '2026-12-01', checkOut: '2026-12-06' }], needHotel: 15 });
+  });
   it('leaves out a pending tour that was never approved', () => {
     expect(reapprovalRow(pendingRow, { IsReApproval: false, TourSubvenuePlan: plans })).toBeNull();
     expect(reapprovalRow(pendingRow, { IsReApproval: true, TourSubvenuePlan: [] })).toBeNull();
@@ -241,7 +245,7 @@ describe('the pull', () => {
     expect(events).toContain('tours');
   });
 
-  it('includes a tour awaiting re-approval, with its latest dates', async () => {
+  it('lists a tour awaiting re-approval as pending, not planned', async () => {
     const rows = [tourRow({ TourId: 6001, ReferenceNo: 'NKERP/TOUR/2026/2217', Status: 'Pending', StartDate: '2026-11-26T18:00:00', EndDate: '2026-12-06T01:00:00', lstSubVenuePlan: [] })];
     const subVenue = {
       6001: {
@@ -254,8 +258,8 @@ describe('the pull', () => {
     };
     const lists = { 6001: [person({ AccomodationOptionId: 2 }), person({ AccomodationOptionId: 3 }), person({ AccomodationOptionId: 3, IsInfant: true })] };
     const result = await runSync({ client: fakeClient(rows, lists, subVenue), from: '2026-12-01', office: OFFICE });
-    expect(result.groups).toHaveLength(1);
-    expect(result.groups[0]).toMatchObject({ tourNo: '2217', pax: 1, infants: 1, checkIn: '2026-12-01', checkOut: '2026-12-06', secondLeg: true });
-    expect(result.meta).toMatchObject({ reapproval: 1, notApproved: 0 });
+    expect(result.groups).toHaveLength(0);
+    expect(result.meta).toMatchObject({ reapproval: 1, notApproved: 1 });
+    expect(result.meta.pending).toEqual([expect.objectContaining({ tourNo: '2217', status: 'Awaiting re-approval', najaf: [{ checkIn: '2026-12-01', checkOut: '2026-12-06' }] })]);
   });
 });

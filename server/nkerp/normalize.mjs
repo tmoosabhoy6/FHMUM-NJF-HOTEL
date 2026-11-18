@@ -191,7 +191,7 @@ export function pendingTour(row, tourPlan) {
     tourId: row?.TourId ?? t.Id,
     ref,
     tourNo: ref.split('/').pop(),
-    status: clean(row?.Status) || 'Pending',
+    status: t.IsReApproval ? 'Awaiting re-approval' : clean(row?.Status) || 'Pending',
     reapproval: Boolean(t.IsReApproval),
     start: dateOf(row?.StartDate ?? t.StartDate),
     end: dateOf(row?.EndDate ?? t.EndDate),

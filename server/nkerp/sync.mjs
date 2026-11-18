@@ -4,7 +4,8 @@
  *   1. Sign in.
  *   2. Tours: General search → Groups for the office. Every tour with its
  *      status, ports, flights and sub-venue plans. Only approved tours with a
- *      Najaf stay in the range go on.
+ *      Najaf stay in the range go on; pending ones (including tours awaiting
+ *      re-approval) are listed, not planned.
  *   3. Guests: each of those tours' guest lists, person by person. A guest
  *      marked "accommodation not required" needs a bed from us, whether or
  *      not the rest of the tour is housed by NKERP.
@@ -14,7 +15,7 @@
  * so the loading screen can show it live: a window lights for each day once
  * every tour arriving by that day has been counted.
  */
-import { addDays, countGuests, countsFromTour, daysBetween, isApprovedTour, isLiveTour, pendingTour, reapprovalRow, sameOffice, staysFromGroupRow, withGuests } from './normalize.mjs';
+import { addDays, countGuests, countsFromTour, daysBetween, isApprovedTour, isLiveTour, pendingTour, sameOffice, staysFromGroupRow, withGuests } from './normalize.mjs';
 
 export const DEFAULT_OFFICE = 'Fayz E Husayni Trust Mumbai';
 const LOOKBACK_DAYS = 45; // a tour that started this long before the range can still be in Najaf
@@ -110,25 +111,21 @@ export async function runSync({ client, from, to: toInput = null, office = DEFAU
     if (isLiveTour(row) && start && start <= horizon && (!end || end >= from)) pending.push(row);
   }
 
-  // Tours awaiting re-approval: General search shows them with no plans, so read their plans.
+  // Tours not approved (Pending, Draft…), including approved tours that were updated and wait for
+  // re-approval: listed for information with what NKERP says about them, not planned. General search
+  // shows them with no plans, so their plans are read. They join the plan once NKERP approves them.
   let notApproved = 0;
   let reapproval = 0;
   const waiting = [];
   const tourPlans = new Map(); // tour plans already read, reused when a guest list is empty
   if (pending.length) {
-    step('tours', 'active', `Checking ${pending.length} pending tours for re-approval`);
+    step('tours', 'active', `Reading ${pending.length} pending tours`);
     await pool(pending, POOL, async (row) => {
       const data = await client.read(`api/tours/getTourSubVenue/${Number(row.TourId)}`, undefined, { signal });
       tourPlans.set(row.TourId, data?.TourPlan);
-      const updated = reapprovalRow(row, data?.TourPlan);
-      const stays = updated ? staysFromGroupRow(updated).filter(inRange) : [];
-      if (stays.length) {
-        byTour.set(row.TourId, stays);
-        reapproval += 1;
-      } else if (!updated) {
-        notApproved += 1;
-        waiting.push(pendingTour(row, data?.TourPlan));
-      }
+      notApproved += 1;
+      if (data?.TourPlan?.IsReApproval) reapproval += 1;
+      waiting.push(pendingTour(row, data?.TourPlan));
     });
   }
   const tours = [...byTour.entries()]
@@ -138,7 +135,7 @@ export async function runSync({ client, from, to: toInput = null, office = DEFAU
   step(
     'tours',
     'done',
-    `${tours.length} approved tours staying in Najaf${reapproval ? ` (${reapproval} awaiting re-approval)` : ''}${notApproved ? `, ${notApproved} not approved yet` : ''}`,
+    `${tours.length} approved tours staying in Najaf${notApproved ? `, ${notApproved} pending in NKERP${reapproval ? ` (${reapproval} awaiting re-approval)` : ''}` : ''}`,
   );
 
   // ---- the days the loading screen shows -----------------------------------
