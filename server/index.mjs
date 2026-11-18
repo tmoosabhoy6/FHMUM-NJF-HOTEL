@@ -9,6 +9,7 @@ import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NkerpError, sharedClient } from './nkerp/client.mjs';
 import { DEFAULT_OFFICE, runSync } from './nkerp/sync.mjs';
+import { fileStore, handleState } from './state.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const DIST = join(ROOT, 'dist');
@@ -70,7 +71,20 @@ async function handleSync(req, res, url) {
   }
 }
 
+const store = await fileStore(join(ROOT, '.data', 'state.json'));
+
+/** The shared saved state (see state.mjs), through the same handler as the Worker. */
+async function handleStateApi(req, res, url) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  const body = req.method === 'GET' || req.method === 'HEAD' ? undefined : Buffer.concat(chunks).toString('utf8');
+  const response = await handleState(new Request(url, { method: req.method, body }), url, store);
+  res.writeHead(response.status, Object.fromEntries(response.headers));
+  res.end(await response.text());
+}
+
 async function handleApi(req, res, url) {
+  if (url.pathname === '/api/state' || url.pathname.startsWith('/api/state/')) return handleStateApi(req, res, url);
   if (req.method !== 'GET') return json(res, 405, { error: 'Read-only API' });
   if (url.pathname === '/api/health') {
     return json(res, 200, { ok: true, nkerp: sharedClient().configured, office: OFFICE });

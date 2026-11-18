@@ -2132,3 +2132,11 @@ button {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Shared save state, next to "Pulled …" */
+.save-status {
+  white-space: nowrap;
+}
+.save-status[data-status='offline'] {
+  color: #b4532a;
+}

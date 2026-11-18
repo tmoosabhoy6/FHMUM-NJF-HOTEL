@@ -10,3 +10,6 @@ dist/
 .wrangler/
 .dev.vars
 worker/assets.generated.mjs
+
+# Local shared state (npm run dev)
+.data/

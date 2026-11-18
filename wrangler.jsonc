@@ -8,5 +8,7 @@
   "compatibility_date": "2026-11-01",
   "workers_dev": true,
   "preview_urls": false,
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
+  // Shared saved state (room requests, hotel choices, last pull, settings): server/state.mjs
+  "d1_databases": [{ "binding": "DB", "database_name": "najaf-stays", "database_id": "b9791f63-d8cf-404c-a4af-142ce7ec81c0" }]
 }

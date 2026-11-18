@@ -24,6 +24,16 @@ login of its own: anyone with the link can use it.
 `npm run build` builds the app and bundles it into the Worker
 (`scripts/embed-assets.mjs`); `npm run deploy` builds and deploys.
 
+**Saved for everyone.** The last pull, room requests, hotel choices, what the
+plan was last refreshed with, hotel settings and the date range are kept in a
+Cloudflare D1 database (`najaf-stays`, binding `DB`, `server/state.mjs`), not
+in the browser, so every device and link sees the same thing. Each device
+checks for others' changes every 15 seconds and when it is brought back into
+view; room requests are saved tour by tour, so two people typing for different
+tours never overwrite each other. The header shows "Saved for everyone" (or
+"Not saved yet, retrying" when the server cannot be reached). `npm run dev`
+keeps the same data in `.data/state.json`.
+
 The repo is connected to the Worker (Workers & Pages → najaf-stays → Settings →
 Build): every push to `main` builds with `npm run build` and deploys with
 `npx wrangler deploy`.

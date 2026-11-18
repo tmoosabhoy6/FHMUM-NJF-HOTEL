@@ -3,12 +3,14 @@
  *
  *   GET /api/health        is NKERP sign-in set up?
  *   GET /api/sync?from&to  the pull, streamed to the loading screen as server-sent events
+ *   /api/state             the app's shared saved state, in D1 (server/state.mjs)
  *
  * The NKERP login comes from the Worker's secrets NKERP_LOGIN_ID and
  * NKERP_PASSWORD. The app itself has no login: anyone with the link can use it.
  */
 import { NkerpError, sharedClient } from '../server/nkerp/client.mjs';
 import { DEFAULT_OFFICE, runSync } from '../server/nkerp/sync.mjs';
+import { d1Store, handleState } from '../server/state.mjs';
 import { FILES } from './assets.generated.mjs';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -93,6 +95,15 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (!url.pathname.startsWith('/api/')) return serveFile(request, url);
+    if (url.pathname === '/api/state' || url.pathname.startsWith('/api/state/')) {
+      if (!env.DB) return json(503, { error: 'Shared storage is not set up' });
+      try {
+        return await handleState(request, url, d1Store(env.DB));
+      } catch (error) {
+        console.error('[state]', error);
+        return json(500, { error: 'Could not save' });
+      }
+    }
     if (request.method !== 'GET') return json(405, { error: 'Read-only API' });
     if (url.pathname === '/api/health') {
       return json(200, { ok: true, nkerp: Boolean(env.NKERP_LOGIN_ID && env.NKERP_PASSWORD), office: env.NKERP_OFFICE_NAME || DEFAULT_OFFICE });

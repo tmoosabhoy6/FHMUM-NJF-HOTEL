@@ -10,6 +10,7 @@ import { Brand } from './components/ui';
 import { exportPlan } from './lib/export';
 import { inputKey } from './lib/inputs';
 import { NamesContext } from './lib/names';
+import { SharedState, type SaveStatus, type Values } from './lib/shared';
 import { load, remove, save } from './lib/storage';
 import { checkServer, emptyProgress, startPull, type PullProgress, type ServerState } from './lib/sync';
 import { Night } from './screens/Night';
@@ -21,7 +22,9 @@ interface Dataset {
 }
 
 // v2: guests are counted person by person, and room requests are written bed size first.
-const KEY = { data: 'njf.dataset.v2', inputs: 'njf.inputs.v2', prefs: 'njf.prefs.v2', range: 'njf.range.v2' };
+// Local copies only: the shared copy everyone sees is on the server (lib/shared.ts).
+const KEY = { data: 'njf.dataset.v2', inputs: 'njf.inputs.v2', applied: 'njf.applied.v2', prefs: 'njf.prefs.v2', range: 'njf.range.v2', merged: 'njf.shared.v1' };
+const POLL_MS = 15_000;
 
 const DEFAULT_PREFS: Prefs = { arafCapacity: 100, departureDayRule: true, withheld: RUYA_WITHHELD };
 
@@ -39,7 +42,7 @@ export function App() {
   // What staff have typed (shown in the Groups table straight away) and what the plan was last built from.
   // The plan only changes when "Refresh plan" copies the one into the other.
   const [typed, setTyped] = useState<Record<string, GroupInput>>(() => load(KEY.inputs, {}));
-  const [applied, setApplied] = useState<Record<string, GroupInput>>(() => load(KEY.inputs, {}));
+  const [applied, setApplied] = useState<Record<string, GroupInput>>(() => load(KEY.applied, load(KEY.inputs, {})));
   const [refreshed, setRefreshed] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>(() => ({ ...DEFAULT_PREFS, ...load<Partial<Prefs>>(KEY.prefs, {}) }));
   const [range, setRange] = useState(() => load(KEY.range, { from: PLANNING_START, to: '' }));
@@ -51,6 +54,12 @@ export function App() {
   const [panel, setPanel] = useState<'settings' | 'messages' | null>(null);
   const [exporting, setExporting] = useState(false);
   const cancel = useRef<(() => void) | null>(null);
+  const [shared] = useState(() => new SharedState());
+  const [loaded, setLoaded] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+  // The latest values, for the poll and for typing (which works from the current room requests).
+  const latest = useRef({ dataset, typed, applied, prefs, range, screen });
+  latest.current = { dataset, typed, applied, prefs, range, screen };
 
   useEffect(() => {
     checkServer().then(setServer);
@@ -58,8 +67,89 @@ export function App() {
     for (const old of ['njf.dataset.v1', 'njf.inputs.v1', 'njf.settings.v1', 'njf.range.v1']) remove(old);
   }, []);
   useEffect(() => save(KEY.inputs, typed), [typed]);
+  useEffect(() => save(KEY.applied, applied), [applied]);
   useEffect(() => save(KEY.prefs, prefs), [prefs]);
   useEffect(() => save(KEY.range, range), [range]);
+  // Settings and the date range go to the shared copy as they change (once it has been read).
+  useEffect(() => {
+    if (loaded) shared.put('prefs', prefs);
+  }, [loaded, prefs, shared]);
+  useEffect(() => {
+    if (loaded) shared.put('range', range);
+  }, [loaded, range, shared]);
+
+  // ---- the shared copy: read it, keep reading other devices' changes -------
+  useEffect(() => {
+    shared.onStatus = setSaveStatus;
+    let stopped = false;
+    const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+    const apply = (values: Values, first: boolean) => {
+      const now = latest.current;
+      if ('dataset' in values && values.dataset && !same(values.dataset, now.dataset)) {
+        const next = values.dataset as Dataset;
+        save(KEY.data, next);
+        setDataset(next);
+        if (first && now.screen === 'start') setScreen('app');
+      }
+      if ('inputs' in values) {
+        const next = { ...(values.inputs as Record<string, GroupInput>) };
+        for (const [k, v] of Object.entries(shared.pendingFields('inputs'))) {
+          if (v === null) delete next[k];
+          else next[k] = v as GroupInput;
+        }
+        if (!same(next, now.typed)) setTyped(next);
+      }
+      if ('applied' in values && !shared.busy('applied') && !same(values.applied, now.applied)) setApplied((values.applied ?? {}) as Record<string, GroupInput>);
+      if ('prefs' in values && !shared.busy('prefs')) {
+        const next = { ...DEFAULT_PREFS, ...(values.prefs as Partial<Prefs>) };
+        if (!same(next, now.prefs)) setPrefs(next);
+      }
+      if ('range' in values && values.range && !shared.busy('range') && !same(values.range, now.range)) setRange(values.range as typeof now.range);
+    };
+    const first = async () => {
+      let values = await shared.poll();
+      while (!values && !stopped) {
+        // Server unreachable: keep working from this device's copy and try again.
+        await new Promise((r) => window.setTimeout(r, 5_000));
+        values = await shared.poll();
+      }
+      if (stopped || !values) return;
+      const now = latest.current;
+      // This device's own earlier work (from before sharing) goes up once: whole keys the server lacks,
+      // and room requests for tours the server has nothing for.
+      if (!load(KEY.merged, false)) {
+        if (values.dataset === undefined && now.dataset) shared.put('dataset', now.dataset);
+        if (values.applied === undefined && Object.keys(now.applied).length) shared.put('applied', now.applied);
+        const server = (values.inputs ?? {}) as Record<string, GroupInput>;
+        for (const [k, v] of Object.entries(now.typed)) if (!(k in server)) shared.patch('inputs', k, v);
+        if (values.prefs === undefined) values.prefs = now.prefs;
+        if (values.range === undefined) values.range = now.range;
+        save(KEY.merged, true);
+      }
+      apply(values, true);
+      setLoaded(true);
+    };
+    void first();
+    const tick = async () => {
+      if (!stopped && latest.current && document.visibilityState !== 'hidden') {
+        const values = await shared.poll();
+        if (values && !stopped) apply(values, false);
+      }
+    };
+    const timer = window.setInterval(tick, POLL_MS);
+    const onFocus = () => void tick();
+    const onHide = () => void shared.flush(true);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    window.addEventListener('pagehide', onHide);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+      window.removeEventListener('pagehide', onHide);
+    };
+  }, [shared]);
   useEffect(() => () => cancel.current?.(), []);
 
   const settings = useMemo<Settings>(() => {
@@ -86,6 +176,7 @@ export function App() {
           onProgress: (update) => setProgress(update),
           onDone: (result) => {
             save(KEY.data, result);
+            shared.put('dataset', result);
             // Let the last windows light before the night lifts.
             window.setTimeout(() => {
               setDataset(result);
@@ -99,7 +190,7 @@ export function App() {
         },
       );
     },
-    [range],
+    [range, shared],
   );
 
   const groups = useMemo(() => dataset?.groups ?? [], [dataset]);
@@ -120,23 +211,25 @@ export function App() {
   }, [groups, typed, applied]);
   const refresh = useCallback(() => {
     setApplied(typed);
+    shared.put('applied', typed);
     setRefreshed(true);
     window.setTimeout(() => setRefreshed(false), 2400);
-  }, [typed]);
+  }, [typed, shared]);
 
   const onInput = useCallback((tourNo: string, patch: GroupInput) => {
     const key = inputKey({ tourNo });
-    setTyped((all) => {
-      const next: GroupInput = { ...all[key], ...patch };
-      if (!next.spec?.trim()) delete next.spec;
-      if (!next.pin) delete next.pin;
-      if (!next.roomNos?.length) delete next.roomNos;
-      const copy = { ...all };
-      if (Object.keys(next).length) copy[key] = next;
-      else delete copy[key];
-      return copy;
-    });
-  }, []);
+    const all = latest.current.typed;
+    const next: GroupInput = { ...all[key], ...patch };
+    if (!next.spec?.trim()) delete next.spec;
+    if (!next.pin) delete next.pin;
+    if (!next.roomNos?.length) delete next.roomNos;
+    const copy = { ...all };
+    if (Object.keys(next).length) copy[key] = next;
+    else delete copy[key];
+    latest.current.typed = copy;
+    setTyped(copy);
+    shared.patch('inputs', key, Object.keys(next).length ? next : null);
+  }, [shared]);
 
   const names = settings.names ?? hotelNames();
   const night = screen !== 'app';
@@ -155,6 +248,9 @@ export function App() {
                   {dataset.meta.to ? ` to ${dayMonth(dataset.meta.to)}` : ''}
                 </b>
                 Pulled {ago(dataset.meta.fetchedAt)}
+                <span className="save-status" data-status={saveStatus} title="Room requests, hotel choices and settings are shared by every device and link">
+                  {saveStatus === 'saving' ? ' · Saving…' : saveStatus === 'offline' ? ' · Not saved yet, retrying' : loaded ? ' · Saved for everyone' : ''}
+                </span>
               </div>
               <div className="top-actions">
                 <button className="btn refresh" data-pending={pending > 0} onClick={refresh} title="Rebuild the plan with the room requests and choices made since the last refresh">
@@ -241,6 +337,9 @@ export function App() {
               setTyped({});
               setApplied({});
               remove(KEY.inputs);
+              remove(KEY.applied);
+              shared.put('inputs', {});
+              shared.put('applied', {});
             }}
           />
         ) : panel === 'messages' && plan ? (
