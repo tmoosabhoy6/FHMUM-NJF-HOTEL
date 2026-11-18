@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain JS module shared with the server
 import { isAllowedRead } from '../server/nkerp/client.mjs';
 // @ts-expect-error plain JS module shared with the server
-import { airlineOf, countGuests, endDateOf, isApprovedTour, pendingTour, reapprovalRow, staysFromGroupRow, withGuests } from '../server/nkerp/normalize.mjs';
+import { airlineOf, countGuests, countsFromTour, endDateOf, isApprovedTour, pendingTour, reapprovalRow, staysFromGroupRow, withGuests } from '../server/nkerp/normalize.mjs';
 // @ts-expect-error plain JS module shared with the server
 import { runSync } from '../server/nkerp/sync.mjs';
 
@@ -164,6 +164,12 @@ describe('counting guests person by person', () => {
     const filled = withGuests(stay, countGuests(guests));
     expect(filled).toMatchObject({ pax: 2, infants: 1, paxTotal: 5, paxNkerpHoused: 2, leader: 'Lead Person' });
     expect(filled.notes.join(' ')).toMatch(/1 infant/);
+  });
+  it('uses the tour’s own totals when an approved tour has no guest list yet', () => {
+    const [stay] = staysFromGroupRow(tourRow());
+    const filled = withGuests(stay, countsFromTour({ PaxNotRequiredAcc: 50, PaxRequiredAcc: 0, PaxCount: 50 }));
+    expect(filled).toMatchObject({ pax: 50, paxTotal: 50, paxNkerpHoused: 0, infants: 0 });
+    expect(filled.notes.join(' ')).toMatch(/Guest list not in NKERP yet/);
   });
 });
 

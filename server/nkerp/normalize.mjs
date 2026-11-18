@@ -234,9 +234,24 @@ export function countGuests(applicants) {
   return counts;
 }
 
+/**
+ * An approved tour whose guest list is still empty in NKERP (common for tours
+ * a few weeks out) still carries the tour's own totals: guests who need a
+ * hotel (PaxNotRequiredAcc) and guests NKERP houses (PaxRequiredAcc). Used in
+ * place of the guest count until the list is filled in. Infants are not told
+ * apart in these totals.
+ */
+export function countsFromTour(tourPlan) {
+  const t = tourPlan ?? {};
+  const notRequired = Number(t.PaxNotRequiredAcc) || 0;
+  const required = Number(t.PaxRequiredAcc) || 0;
+  return { total: notRequired + required || Number(t.PaxCount) || 0, required, notRequired, infants: 0, unknown: 0, cancelled: 0, leader: '', fromTour: true };
+}
+
 /** Fills a stay's guest numbers from its tour's guest count. */
 export function withGuests(stay, counts) {
   const notes = [...stay.notes];
+  if (counts.fromTour) notes.push('Guest list not in NKERP yet: numbers are the tour’s own totals.');
   if (counts.infants) notes.push(`${counts.infants} ${counts.infants === 1 ? 'infant' : 'infants'} too, sharing a bed.`);
   if (counts.unknown) notes.push(`${counts.unknown} ${counts.unknown === 1 ? 'guest has' : 'guests have'} no accommodation choice in NKERP.`);
   return {

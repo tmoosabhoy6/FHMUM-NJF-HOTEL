@@ -14,7 +14,7 @@
  * so the loading screen can show it live: a window lights for each day once
  * every tour arriving by that day has been counted.
  */
-import { addDays, countGuests, daysBetween, isApprovedTour, isLiveTour, pendingTour, reapprovalRow, sameOffice, staysFromGroupRow, withGuests } from './normalize.mjs';
+import { addDays, countGuests, countsFromTour, daysBetween, isApprovedTour, isLiveTour, pendingTour, reapprovalRow, sameOffice, staysFromGroupRow, withGuests } from './normalize.mjs';
 
 export const DEFAULT_OFFICE = 'Fayz E Husayni Trust Mumbai';
 const LOOKBACK_DAYS = 45; // a tour that started this long before the range can still be in Najaf
@@ -114,10 +114,12 @@ export async function runSync({ client, from, to: toInput = null, office = DEFAU
   let notApproved = 0;
   let reapproval = 0;
   const waiting = [];
+  const tourPlans = new Map(); // tour plans already read, reused when a guest list is empty
   if (pending.length) {
     step('tours', 'active', `Checking ${pending.length} pending tours for re-approval`);
     await pool(pending, POOL, async (row) => {
       const data = await client.read(`api/tours/getTourSubVenue/${Number(row.TourId)}`, undefined, { signal });
+      tourPlans.set(row.TourId, data?.TourPlan);
       const updated = reapprovalRow(row, data?.TourPlan);
       const stays = updated ? staysFromGroupRow(updated).filter(inRange) : [];
       if (stays.length) {
@@ -161,7 +163,13 @@ export async function runSync({ client, from, to: toInput = null, office = DEFAU
     }
   };
   await pool(tours, POOL, async (tour) => {
-    const counts = countGuests(await readGuests(client, tour.tourId, signal));
+    let counts = countGuests(await readGuests(client, tour.tourId, signal));
+    if (!counts.total) {
+      // Approved, but NKERP has no guest list for it yet: use the tour's own totals.
+      let plan = tourPlans.get(tour.tourId);
+      if (plan === undefined) plan = (await client.read(`api/tours/getTourSubVenue/${Number(tour.tourId)}`, undefined, { signal }))?.TourPlan;
+      if (plan) counts = countsFromTour(plan);
+    }
     for (const stay of tour.stays) counted.push(withGuests(stay, counts));
     done.add(tour.tourId);
     const selfHoused = counted.filter((s) => s.pax > 0);

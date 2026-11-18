@@ -47,7 +47,10 @@ Build): every push to `main` builds with `npm run build` and deploys with
    - **Each tour's guest list**, person by person. A guest marked
      "accommodation not required" needs a bed from us, whether or not the rest
      of the tour is housed by NKERP. Cancelled, inactive and dummy guests are
-     left out; infants are counted apart (they share a bed).
+     left out; infants are counted apart (they share a bed). An approved tour
+     whose guest list NKERP has not filled in yet (common a few weeks out) is
+     counted from the tour's own totals (guests who need a hotel / housed by
+     NKERP), marked in the Groups table, until the list is there.
 2. **Plan.** The page opens straight on the plan, laid out like the Excel
    file: a summary per hotel, the daily plan (click a night to see the Ruya
    rooms floor by floor), the bookings to make, and the groups. Under each
