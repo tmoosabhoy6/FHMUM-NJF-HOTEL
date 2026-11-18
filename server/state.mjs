@@ -1,7 +1,8 @@
 /**
  * The app's shared saved state: the last pull, room requests and hotel
  * choices, what the plan was last built from, hotel settings and the date
- * range. One copy for everyone, so every device and every link to the app
+ * range; and the same for the Karbala tab (karbala* keys: its last pull, room
+ * requests, what its messages were last built from, its date range). One copy for everyone, so every device and every link to the app
  * sees the same thing.
  *
  *   GET   /api/state?since=N   keys changed after version N (all keys when N is 0)
@@ -14,9 +15,9 @@
  * Stores: D1 on Cloudflare (d1Store), a JSON file for `npm run dev` (fileStore).
  */
 
-export const STATE_KEYS = new Set(['dataset', 'inputs', 'applied', 'prefs', 'range']);
+export const STATE_KEYS = new Set(['dataset', 'inputs', 'applied', 'prefs', 'range', 'karbalaDataset', 'karbalaInputs', 'karbalaApplied', 'karbalaRange']);
 /** Keys holding one entry per tour, which devices change field by field. */
-const PATCH_KEYS = new Set(['inputs', 'applied']);
+const PATCH_KEYS = new Set(['inputs', 'applied', 'karbalaInputs', 'karbalaApplied']);
 const FIELD = /^[A-Za-z0-9 _.\/-]{1,60}$/;
 const MAX_BODY = 1_500_000;
 

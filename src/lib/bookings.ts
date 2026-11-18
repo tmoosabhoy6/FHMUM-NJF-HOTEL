@@ -53,3 +53,10 @@ export function legDetail(leg: Group['arrival'], at: string | null, word: 'From'
 
 /** The date and the detail on one line, for the Excel file. */
 export const legText = (leg: Group['arrival'], at: string | null, date: string, word: 'From' | 'To') => `${fullDate(date)} · ${legDetail(leg, at, word)}`;
+
+/** Under a date: "(subvenue)" for a transfer, else the flight code and its time. */
+export function howText(leg: Group['arrival'], at: string | null): string {
+  if (leg.kind === 'transfer') return '(subvenue)';
+  if (leg.kind !== 'airport') return '';
+  return [leg.flight, clock(at)].filter(Boolean).join(', ');
+}

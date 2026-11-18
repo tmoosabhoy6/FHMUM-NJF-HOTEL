@@ -1,11 +1,13 @@
 import { motion } from 'motion/react';
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { addDays, dayMonth, dayNumber, eachDate, fullDate, monthShort } from '../../shared/dates';
 import { Brand, Num } from '../components/ui';
 import { useNames } from '../lib/names';
 import { STEP_ORDER, STEP_TITLE, type PullProgress, type ServerState } from '../lib/sync';
 
 interface Props {
+  /** The city tabs, next to the name. */
+  tabs?: ReactNode;
   mode: 'start' | 'pulling' | 'failed';
   from: string;
   to: string;
@@ -94,7 +96,10 @@ export function Night(props: Props) {
     >
       <div className="night-inner">
         <header className="night-top">
-          <Brand />
+          <span className="night-brand">
+            <Brand />
+            {props.tabs}
+          </span>
           {pulling ? (
             <button className="linkish" onClick={props.onCancel}>
               Stop the pull

@@ -31,7 +31,7 @@ export function Num({ value }: { value: number }) {
   );
 }
 
-export function Brand() {
+export function Brand({ name = 'Najaf stays' }: { name?: string }) {
   return (
     <span className="brand">
       <span className="brand-mark" aria-hidden="true">
@@ -39,8 +39,26 @@ export function Brand() {
           <i key={i} className={on ? 'on' : ''} />
         ))}
       </span>
-      Najaf stays
+      {name}
     </span>
+  );
+}
+
+/** The city tabs at the top: Najaf (the full planner) and Karbala (messages only). */
+export function CityTabs({ tab, onTab, dark = false }: { tab: 'najaf' | 'karbala'; onTab: (tab: 'najaf' | 'karbala') => void; dark?: boolean }) {
+  return (
+    <nav className="city-tabs" data-dark={dark} aria-label="City">
+      {(
+        [
+          ['najaf', 'Najaf'],
+          ['karbala', 'Karbala'],
+        ] as const
+      ).map(([id, label]) => (
+        <button key={id} type="button" aria-current={tab === id ? 'page' : undefined} onClick={() => onTab(id)}>
+          {label}
+        </button>
+      ))}
+    </nav>
   );
 }
 

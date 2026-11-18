@@ -5,11 +5,15 @@ import type { PendingTour } from '../../shared/types';
 
 interface Props {
   tours: PendingTour[];
+  /** The city pulled, for the dates column. */
+  city?: 'Najaf' | 'Karbala';
+  /** What the tours are left out of. */
+  outOf?: string;
   onClose: () => void;
 }
 
 /** Tours NKERP has not approved yet: shown for information, not planned. */
-export function PendingTours({ tours, onClose }: Props) {
+export function PendingTours({ tours, city = 'Najaf', outOf = 'the plan', onClose }: Props) {
   const [onlyHotel, setOnlyHotel] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -43,8 +47,8 @@ export function PendingTours({ tours, onClose }: Props) {
         <div className="drawer-body">
           <section className="set">
             <p>
-              {tours.length} {tours.length === 1 ? 'tour is' : 'tours are'} not approved in NKERP yet, or waiting for re-approval after a change, so they are not in the plan.{' '}
-              {withGuests.length} of them {withGuests.length === 1 ? 'has' : 'have'} guests who will need a hotel ({guests} guests). They join the plan
+              {tours.length} {tours.length === 1 ? 'tour is' : 'tours are'} not approved in NKERP yet, or waiting for re-approval after a change, so they are not in {outOf}.{' '}
+              {withGuests.length} of them {withGuests.length === 1 ? 'has' : 'have'} guests who will need a hotel ({guests} guests). They join {outOf}
               by themselves once approved and pulled again.
             </p>
             <label className="switch" style={{ marginTop: 12 }}>
@@ -61,7 +65,7 @@ export function PendingTours({ tours, onClose }: Props) {
                   <th scope="col">Arrives</th>
                   <th scope="col">Leaves</th>
                   <th scope="col">Ports</th>
-                  <th scope="col">Najaf</th>
+                  <th scope="col">{city}</th>
                   <th scope="col" className="n">
                     Guests
                   </th>
@@ -88,9 +92,9 @@ export function PendingTours({ tours, onClose }: Props) {
                       {t.exitPort && t.exitPort !== t.entryPort ? ` → ${t.exitPort}` : ''}
                     </td>
                     <td>
-                      {t.najaf.length ? (
+                      {(t.stays ?? t.najaf).length ? (
                         <>
-                          {t.najaf.map((n) => rangeLabel(n.checkIn, n.checkOut)).join(', ')}
+                          {(t.stays ?? t.najaf).map((n) => rangeLabel(n.checkIn, n.checkOut)).join(', ')}
                           {t.route ? <small className="route">{t.route}</small> : null}
                         </>
                       ) : (

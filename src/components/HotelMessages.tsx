@@ -5,6 +5,7 @@ import { HOTEL_ORDER } from '../../shared/engine';
 import { hotelMessage, type HotelMessage } from '../../shared/messages';
 import type { Group, HotelId, Plan } from '../../shared/types';
 import { useNames } from '../lib/names';
+import { copy } from '../lib/copy';
 import { load, save } from '../lib/storage';
 
 const KIND_KEY = 'njf.messageKind.v1';
@@ -19,24 +20,6 @@ interface Props {
 }
 
 type Item = HotelMessage & { hotel: HotelId; leader: string };
-
-/** Copies text, with a fallback for browsers that block the clipboard API. */
-async function copy(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    const area = document.createElement('textarea');
-    area.value = text;
-    area.style.position = 'fixed';
-    area.style.opacity = '0';
-    document.body.appendChild(area);
-    area.select();
-    const ok = document.execCommand('copy');
-    area.remove();
-    return ok;
-  }
-}
 
 /** The room-request messages to send to the hotels, one per group, by arrival date. */
 export function HotelMessages({ groups, plan, pending, onRefresh, onClose }: Props) {

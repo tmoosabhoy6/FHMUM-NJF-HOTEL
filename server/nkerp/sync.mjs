@@ -15,7 +15,7 @@
  * so the loading screen can show it live: a window lights for each day once
  * every tour arriving by that day has been counted.
  */
-import { addDays, countGuests, countsFromTour, daysBetween, isApprovedTour, isLiveTour, pendingTour, sameOffice, staysFromGroupRow, withGuests } from './normalize.mjs';
+import { addDays, countGuests, countsFromTour, daysBetween, isApprovedTour, isLiveTour, pendingTour, sameOffice, staysFromGroupRow, venueOf, withGuests } from './normalize.mjs';
 
 export const DEFAULT_OFFICE = 'Fayz E Husayni Trust Mumbai';
 const LOOKBACK_DAYS = 45; // a tour that started this long before the range can still be in Najaf
@@ -77,8 +77,14 @@ async function pool(items, size, worker) {
   await Promise.all(Array.from({ length: Math.min(size, items.length) }, run));
 }
 
-export async function runSync({ client, from, to: toInput = null, office = DEFAULT_OFFICE, emit = () => {}, signal }) {
+/**
+ * `venue` is 'najaf' (the default) or 'karbala': the same pull, reading the
+ * stays in that city.
+ */
+export async function runSync({ client, from, to: toInput = null, office = DEFAULT_OFFICE, venue: venueInput = 'najaf', emit = () => {}, signal }) {
   const to = toInput || null;
+  const venue = venueOf(venueInput);
+  const city = venue === 'karbala' ? 'Karbala' : 'Najaf';
   const started = Date.now();
   const step = (id, status, detail) => emit('step', { id, status, detail });
   const inRange = (stay) => stay.checkOut >= from && (!to || stay.checkIn <= to);
@@ -101,7 +107,7 @@ export async function runSync({ client, from, to: toInput = null, office = DEFAU
   const pending = [];
   for (const row of rows) {
     if (isApprovedTour(row)) {
-      const stays = staysFromGroupRow(row).filter(inRange);
+      const stays = staysFromGroupRow(row, venue).filter(inRange);
       if (stays.length) byTour.set(row.TourId, stays);
       continue;
     }
@@ -125,7 +131,7 @@ export async function runSync({ client, from, to: toInput = null, office = DEFAU
       tourPlans.set(row.TourId, data?.TourPlan);
       notApproved += 1;
       if (data?.TourPlan?.IsReApproval) reapproval += 1;
-      waiting.push(pendingTour(row, data?.TourPlan));
+      waiting.push(pendingTour(row, data?.TourPlan, venue));
     });
   }
   const tours = [...byTour.entries()]
@@ -135,7 +141,7 @@ export async function runSync({ client, from, to: toInput = null, office = DEFAU
   step(
     'tours',
     'done',
-    `${tours.length} approved tours staying in Najaf${notApproved ? `, ${notApproved} pending in NKERP${reapproval ? ` (${reapproval} awaiting re-approval)` : ''}` : ''}`,
+    `${tours.length} approved tours staying in ${city}${notApproved ? `, ${notApproved} pending in NKERP${reapproval ? ` (${reapproval} awaiting re-approval)` : ''}` : ''}`,
   );
 
   // ---- the days the loading screen shows -----------------------------------
@@ -192,6 +198,7 @@ export async function runSync({ client, from, to: toInput = null, office = DEFAU
     groups,
     meta: {
       source: 'nkerp',
+      venue,
       office,
       from,
       to,

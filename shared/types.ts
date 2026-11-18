@@ -34,8 +34,12 @@ export interface Group {
   notes: string[];
 }
 
+export type Venue = 'najaf' | 'karbala';
+
 export interface PullMeta {
   source: 'nkerp' | 'sample';
+  /** The city pulled (absent on pulls made before the Karbala tab: Najaf). */
+  venue?: Venue;
   office: string;
   from: string;
   to: string | null;
@@ -223,6 +227,8 @@ export interface PendingTour {
   route: string;
   /** Najaf stays from the tour's latest plans, when it has any. */
   najaf: { checkIn: string; checkOut: string }[];
+  /** Stays in the city that was pulled (Najaf or Karbala). Absent on older pulls: use `najaf`. */
+  stays?: { checkIn: string; checkOut: string }[];
   pax: number;
   /** Guests marked "accommodation not required" (infants not counted), as NKERP counts them for the tour. */
   needHotel: number | null;

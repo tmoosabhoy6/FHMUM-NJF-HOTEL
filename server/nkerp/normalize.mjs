@@ -14,6 +14,18 @@ export const NAJAF = 'NAJAF';
 export const KARBALA = 'KARBALA';
 export const SUBVENUE_NAJAF = 3;
 
+/**
+ * The two cities a tour stays in. Najaf plans are known by sub-venue id 3 (or
+ * name); Karbala plans by name. `other` is where a transfer comes from or goes to.
+ */
+export const VENUES = {
+  najaf: { name: NAJAF, id: SUBVENUE_NAJAF, other: KARBALA },
+  karbala: { name: KARBALA, id: null, other: NAJAF },
+};
+
+/** 'najaf' unless 'karbala' is asked for. */
+export const venueOf = (value) => (value === 'karbala' ? 'karbala' : 'najaf');
+
 /** Tour statuses that mean NKERP has approved the tour. */
 export const APPROVED_STATUSES = new Set(['APPROVED', 'CURRENT', 'COMPLETED']);
 
@@ -103,6 +115,12 @@ export function reapprovalRow(row, tourPlan) {
   };
 }
 
+/** True when a sub-venue plan is a stay in `venue` ('najaf' or 'karbala'). */
+export function isVenuePlan(plan, venue = 'najaf') {
+  const v = VENUES[venueOf(venue)];
+  return (v.id !== null && Number(plan?.SubvenueId) === v.id) || upper(plan?.SubvenueName) === v.name;
+}
+
 const activePlans = (row) =>
   (row?.lstSubVenuePlan ?? [])
     .filter((p) => p && p.IsActive !== false && !p.IsRemoved && p.StartDateTimeZone && p.EndDateTimeZone)
@@ -118,16 +136,18 @@ function pickItinerary(itineraries, from, to) {
 }
 
 /**
- * One tour row from General search → Groups → one stay per Najaf plan.
+ * One tour row from General search → Groups → one stay per Najaf plan (or
+ * per Karbala plan, with `venue` 'karbala').
  * Guest counts are filled in later from the guest list (`withGuests`).
  */
-export function staysFromGroupRow(row) {
+export function staysFromGroupRow(row, venue = 'najaf') {
   const ref = clean(row?.ReferenceNo);
   if (!ref || !row?.TourId) return [];
+  const other = VENUES[venueOf(venue)].other;
   const plans = activePlans(row);
   const stays = [];
   plans.forEach((plan, i) => {
-    if (Number(plan.SubvenueId) !== SUBVENUE_NAJAF && upper(plan.SubvenueName) !== NAJAF) return;
+    if (!isVenuePlan(plan, venue)) return;
     const checkIn = dateOf(plan.StartDateTimeZone);
     const checkOut = endDateOf(plan.EndDateTimeZone);
     if (!checkIn || !checkOut || checkOut < checkIn) return;
@@ -136,10 +156,10 @@ export function staysFromGroupRow(row) {
     const itinerary = pickItinerary(row.lstTransportItinerary, checkIn, checkOut);
 
     const arrival = previous
-      ? { kind: 'transfer', place: upper(previous.SubvenueName) || KARBALA, flight: null }
+      ? { kind: 'transfer', place: upper(previous.SubvenueName) || other, flight: null }
       : { kind: 'airport', place: clean(row.EntryPort), flight: clean(itinerary?.ArrivalTransportCode) || null };
     const departure = next
-      ? { kind: 'transfer', place: upper(next.SubvenueName) || KARBALA, flight: null, airline: null }
+      ? { kind: 'transfer', place: upper(next.SubvenueName) || other, flight: null, airline: null }
       : { kind: 'airport', place: clean(row.ExitPort), flight: clean(itinerary?.DepartureTransportCode) || null, airline: null };
     departure.airline = airlineOf(departure.flight);
 
@@ -164,7 +184,8 @@ export function staysFromGroupRow(row) {
       departureAt: departure.kind === 'airport' ? leaves : null,
       arrival,
       departure,
-      secondLeg: arrival.kind === 'transfer' && arrival.place === KARBALA,
+      // Najaf after Karbala (or Karbala after Najaf): this city is the second half of the trip.
+      secondLeg: arrival.kind === 'transfer' && arrival.place === other,
       notes: row.reapproval ? ['Updated in NKERP and awaiting re-approval: planned with its latest dates.'] : [],
     });
   });
@@ -174,17 +195,19 @@ export function staysFromGroupRow(row) {
 /**
  * A tour that is not approved yet, for the "Pending tours" table: what the
  * tour says about itself (trip dates, ports, guests and the guests who need a
- * hotel, as NKERP counts them for the tour), and its Najaf dates when it has
- * any plans.
+ * hotel, as NKERP counts them for the tour), and its Najaf dates (`najaf`) and
+ * the dates in `venue` (`stays`) when it has any plans.
  */
-export function pendingTour(row, tourPlan) {
+export function pendingTour(row, tourPlan, venue = 'najaf') {
   const t = tourPlan ?? {};
   const ref = clean(row?.ReferenceNo ?? t.ReferenceNo);
   const plans = latestPlans(t).sort((a, b) => String(a.StartDateTimeZone).localeCompare(String(b.StartDateTimeZone)));
-  const najaf = plans
-    .filter((p) => Number(p.SubvenueId) === SUBVENUE_NAJAF || upper(p.SubvenueName) === NAJAF)
-    .map((p) => ({ checkIn: dateOf(p.StartDateTimeZone), checkOut: endDateOf(p.EndDateTimeZone) }))
-    .filter((n) => n.checkIn && n.checkOut);
+  const datesIn = (v) =>
+    plans
+      .filter((p) => isVenuePlan(p, v))
+      .map((p) => ({ checkIn: dateOf(p.StartDateTimeZone), checkOut: endDateOf(p.EndDateTimeZone) }))
+      .filter((n) => n.checkIn && n.checkOut);
+  const najaf = datesIn('najaf');
   const name = (p) => (upper(p.SubvenueName) === NAJAF ? 'Najaf' : upper(p.SubvenueName) === KARBALA ? 'Karbala' : clean(p.SubvenueName));
   const count = (value) => (value === null || value === undefined ? null : Number(value) || 0);
   return {
@@ -199,6 +222,7 @@ export function pendingTour(row, tourPlan) {
     exitPort: clean(row?.ExitPort ?? t.ExitPortName),
     route: plans.map(name).join(' → '),
     najaf,
+    stays: venueOf(venue) === 'najaf' ? najaf : datesIn(venue),
     pax: Number(row?.PaxCount ?? t.PaxCount) || 0,
     needHotel: count(t.PaxNotRequiredAcc),
     housed: count(t.PaxRequiredAcc),
