@@ -1,10 +1,17 @@
 import { DEFAULT_HOTEL_NAMES, HOTEL_ORDER, reasonLabel } from '../../shared/engine';
-import { dayLabel, fullDate } from '../../shared/dates';
+import { addDays, clock, dayLabel, fullDate } from '../../shared/dates';
 import { describeRooms } from '../../shared/roomSpec';
 import type { Group, HotelNames, Plan, PullMeta } from '../../shared/types';
 
 const INK = 'FF13233B';
 const FILL: Record<string, string> = { ruya: 'FFDCEFEC', araf: 'FFF6EBCF', c: 'FFF5DDE5' };
+
+/** "24 Dec 2026 · Baghdad Airport · IA 441, 14:30", or "26 Dec 2026 · From Karbala (subvenue)". */
+function legText(leg: Group['arrival'], at: string | null, date: string, word: 'From' | 'To'): string {
+  if (leg.kind === 'transfer') return `${fullDate(date)} · ${word} ${leg.place ? leg.place.charAt(0) + leg.place.slice(1).toLowerCase() : 'Karbala'} (subvenue)`;
+  const flight = [leg.flight, clock(at)].filter(Boolean).join(', ');
+  return [fullDate(date), leg.place, flight || 'Flight not in NKERP'].filter(Boolean).join(' · ');
+}
 
 /** Builds the Excel report and hands it to the browser as a download. */
 export async function exportPlan(plan: Plan, groups: Group[], meta: PullMeta, names: HotelNames = DEFAULT_HOTEL_NAMES) {
@@ -70,28 +77,50 @@ export async function exportPlan(plan: Plan, groups: Group[], meta: PullMeta, na
   }
   head(daily);
 
-  // ---- what to book --------------------------------------------------------
+  // ---- what to book: one row per tour per hotel stay --------------------------
   const bookings = book.addWorksheet('Bookings to make');
   bookings.columns = [
     { header: 'Hotel', key: 'hotel', width: 12 },
+    { header: 'Tour', key: 'tour', width: 9 },
+    { header: 'Group leader', key: 'leader', width: 30 },
     { header: 'First night', key: 'from', width: 16 },
     { header: 'Last night', key: 'to', width: 16 },
     { header: 'Nights', key: 'nights', width: 9 },
     { header: 'Guests', key: 'pax', width: 9 },
-    { header: 'Tours', key: 'tours', width: 40 },
+    { header: 'Arrival (flight)', key: 'arrival', width: 36 },
+    { header: 'Departure (flight)', key: 'departure', width: 36 },
   ];
+  const rows: { hotel: string; order: number; tour: string; from: string; lastNight: string; nights: number; group: Group }[] = [];
+  const seen = new Set<string>();
   for (const b of plan.bookings) {
-    for (const step of b.steps) {
-      const ids = b.groupIds.filter((id) => plan.placements[id]?.nights.some((n) => n >= step.from && n <= step.lastNight));
-      bookings.addRow({
-        hotel: names[b.hotel],
-        from: fullDate(step.from),
-        to: fullDate(step.lastNight),
-        nights: Math.round((Date.parse(step.lastNight) - Date.parse(step.from)) / 86_400_000) + 1,
-        pax: step.pax,
-        tours: tours(ids),
-      });
+    for (const id of b.groupIds) {
+      const p = plan.placements[id];
+      const g = byId.get(id);
+      if (!p || !g || seen.has(`${b.hotel}:${id}`)) continue;
+      seen.add(`${b.hotel}:${id}`);
+      // The tour's nights in this hotel, as runs of consecutive nights (normally one).
+      const nights = [...p.nights].sort();
+      let start = 0;
+      for (let i = 1; i <= nights.length; i += 1) {
+        if (i < nights.length && addDays(nights[i - 1], 1) === nights[i]) continue;
+        rows.push({ hotel: b.hotel, order: HOTEL_ORDER.indexOf(b.hotel), tour: g.tourNo, from: nights[start], lastNight: nights[i - 1], nights: i - start, group: g });
+        start = i;
+      }
     }
+  }
+  rows.sort((a, b) => a.from.localeCompare(b.from) || a.order - b.order || a.tour.localeCompare(b.tour, undefined, { numeric: true }));
+  for (const r of rows) {
+    bookings.addRow({
+      hotel: names[r.hotel as keyof HotelNames],
+      tour: Number(r.tour) || r.tour,
+      leader: r.group.leader,
+      from: fullDate(r.from),
+      to: fullDate(r.lastNight),
+      nights: r.nights,
+      pax: r.group.pax,
+      arrival: legText(r.group.arrival, r.group.arrivalAt, r.group.checkIn, 'From'),
+      departure: legText(r.group.departure, r.group.departureAt, r.group.checkOut, 'To'),
+    });
   }
   head(bookings);
 

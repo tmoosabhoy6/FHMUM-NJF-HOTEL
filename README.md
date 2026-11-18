@@ -72,7 +72,7 @@ Build): every push to `main` builds with `npm run build` and deploys with
 4. **Hotel messages.** One message per group in the team's format (`shared/messages.ts`),
    by check-in date, filtered by hotel, with a Copy button on each and "Copy
    all" per date. Two types: requirements only, or with the planned room
-   numbers on each room line (`- Room no. 106, 107`). "Download Excel" exports the plan.
+   numbers on each room line (`- Room no. 106, 107`). "Download Excel" exports the plan; its "Bookings to make" sheet has one row per tour per hotel (first and last night, nights, guests, arrival and departure flight or subvenue).
 
 ### Typed rooms: how they are read (`shared/roomSpec.ts`)
 
