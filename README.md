@@ -52,7 +52,7 @@ Build): every push to `main` builds with `npm run build` and deploys with
      Completed) with a Najaf stay in the range go on.
    - **Pending tours**, including approved tours that were updated and wait
      for re-approval (NKERP lists them as Pending with no plans until it
-     re-approves them). The Approvals tab proposes Najaf hotel stays for them.
+     re-approves them). The Najaf Approvals tab proposes Najaf hotel stays for them.
      The pull reads their sub-venue plans, and "See the pending tours" on the plan lists them (status, trip
      dates, ports, latest Najaf dates if any, guests who will need a hotel);
      the Excel file has a "Pending tours" sheet. They join the plan by
@@ -80,9 +80,20 @@ Build): every push to `main` builds with `npm run build` and deploys with
    all" per date. Two types: requirements only, or with the planned room
    numbers on each room line (`- Room no. 106, 107`). "Download Excel" exports the plan; its "Bookings to make" sheet has one row per tour per hotel (first and last night, nights, guests, arrival and departure flight or subvenue).
 
-## Approvals tab
+## Karbala Hotel Messages tab
 
-Open **Approvals** after a Najaf pull and select the tour arrival dates.
+A message generator only: no hotels and no room plan. Pull Karbala from NKERP
+(same rules as Najaf: approved tours, guests marked "accommodation not
+required", pending tours listed apart). Each group shows its tour, leader,
+hotel pax, arrival, departure, nights and rooms asked for. Type the rooms and
+the messages below update by themselves, one per group in the team's format
+with `KARBALA (03 NIGHT)` in the heading, by check-in date, with Copy and
+"Copy all" per day. Saved for everyone under the `karbala*` keys. Code:
+`shared/karbala.ts`, `src/lib/karbala.ts`, `src/screens/Karbala.tsx`.
+
+## Najaf Approvals tab
+
+Open **Najaf Approvals** after a Najaf pull and select the tour arrival dates.
 The proposal keeps the approved Najaf plan and its exact room assignments
 fixed. It compares both city orders for pending hotel groups, using their
 saved pax and room requirements where available. Each trip has two contiguous

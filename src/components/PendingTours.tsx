@@ -11,10 +11,12 @@ interface Props {
   inputs: TourInputs;
   onEdit: (tour: PendingTour, change: InputChange) => void;
   onClose: () => void;
+  /** The city pulled, for the dates column. */
+  city?: 'Najaf' | 'Karbala';
 }
 
 /** Tours NKERP has not approved yet: shown for information, not planned. */
-export function PendingTours({ tours, meta, inputs, onEdit, onClose }: Props) {
+export function PendingTours({ tours, meta, inputs, onEdit, onClose, city = 'Najaf' }: Props) {
   const [onlyHotel, setOnlyHotel] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -67,7 +69,7 @@ export function PendingTours({ tours, meta, inputs, onEdit, onClose }: Props) {
                   <th scope="col">Arrives</th>
                   <th scope="col">Leaves</th>
                   <th scope="col">Ports</th>
-                  <th scope="col">Najaf</th>
+                  <th scope="col">{city}</th>
                   <th scope="col" className="n">
                     Guests
                   </th>

@@ -9,11 +9,13 @@ import { SettingsDrawer, type Prefs } from './components/SettingsDrawer';
 import { Brand, CityTabs, type PlannerTab } from './components/ui';
 import { exportPlan } from './lib/export';
 import { editInput, inputKey, legacyKey, tourInput, withHotelPax, type InputChange, type TourInputs } from './lib/inputs';
+import { useKarbala } from './lib/karbala';
 import { NamesContext } from './lib/names';
 import { SharedState, type SaveStatus, type Values } from './lib/shared';
 import { load, save } from './lib/storage';
 import { checkServer, emptyProgress, startPull, type PullProgress, type PullResult, type ServerState } from './lib/sync';
 import { ApprovalsView } from './screens/Approvals';
+import { KarbalaView } from './screens/Karbala';
 import { Night } from './screens/Night';
 import { PlanView } from './screens/PlanView';
 
@@ -57,11 +59,15 @@ export function App() {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
   const [tab, setTab] = useState<PlannerTab>(() => {
     const saved = load<string>(KEY.tab, 'najaf');
-    return saved === 'approvals' ? saved : 'najaf';
+    return saved === 'approvals' || saved === 'karbala' ? saved : 'najaf';
   });
   const returnToApprovals = useRef(false);
   useEffect(() => save(KEY.tab, tab), [tab]);
   const pollNow = useRef<() => void>(() => {});
+  // Karbala: the hotel-message generator (screens/Karbala.tsx). Lives here so its shared data keeps arriving on the other tabs.
+  const karbala = useKarbala(shared, range, () => pollNow.current());
+  const karbalaApply = useRef(karbala.apply);
+  karbalaApply.current = karbala.apply;
   const latest = useRef({ savedDataset, screen });
   latest.current = { savedDataset, screen };
 
@@ -87,6 +93,7 @@ export function App() {
       if ('inputs' in values || first) setTyped(shared.withPending('inputs', (values.inputs ?? {}) as TourInputs));
       if ('prefs' in values && !shared.pending('prefs')) setPrefs({ ...DEFAULT_PREFS, ...values.prefs as Partial<Prefs> });
       if (values.range && !shared.pending('range')) setRange(values.range as typeof range);
+      karbalaApply.current(values, first);
       first = false;
       setLoaded(true);
     };
@@ -212,6 +219,14 @@ export function App() {
     if (returnToApprovals.current) changeTab('approvals');
   };
   const tabs = (dark = false) => <CityTabs tab={tab} onTab={changeTab} dark={dark} />;
+
+  if (tab === 'karbala') {
+    return (
+      <NamesContext.Provider value={names}>
+        <KarbalaView k={karbala} tabs={tabs()} server={server} departureDayRule={prefs.departureDayRule} saveStatus={saveStatus} loaded={loaded} ago={ago} />
+      </NamesContext.Provider>
+    );
+  }
 
   if (tab === 'approvals') {
     return (
