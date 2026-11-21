@@ -44,14 +44,16 @@ export function Brand({ name = 'Najaf stays' }: { name?: string }) {
   );
 }
 
-export type PlannerTab = 'najaf' | 'approvals';
+export type PlannerTab = 'najaf' | 'karbala' | 'approvals';
+/** The tabs at the top: Najaf (the full planner), Karbala (hotel messages only) and Approvals. */
 export function CityTabs({ tab, onTab, dark = false }: { tab: PlannerTab; onTab: (tab: PlannerTab) => void; dark?: boolean }) {
   return (
     <nav className="city-tabs" data-dark={dark} aria-label="Planner">
       {(
         [
           ['najaf', 'Najaf'],
-          ['approvals', 'Approvals'],
+          ['karbala', 'Karbala Hotel Messages'],
+          ['approvals', 'Najaf Approvals'],
         ] as const
       ).map(([id, label]) => (
         <button key={id} type="button" aria-current={tab === id ? 'page' : undefined} onClick={() => onTab(id)}>

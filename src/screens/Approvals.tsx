@@ -276,7 +276,7 @@ export function ApprovalsView({ tabs, dataset, inputs, settings, loaded, saveSta
       </header>
       <main className="page">
         <div className="overview-head">
-          <h1>Hotel approval plan</h1>
+          <h1>Najaf hotel approval plan</h1>
           <p>Keep approved stays fixed and fit pending tours into {names.ruya} as whole groups. Trips split evenly between Karbala and Najaf, with the extra night in Karbala on odd-length trips.</p>
         </div>
         {dataset ? <Planner dataset={dataset} inputs={inputs} settings={settings} /> : (
