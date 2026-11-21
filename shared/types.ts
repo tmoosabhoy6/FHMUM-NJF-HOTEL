@@ -58,6 +58,8 @@ export interface PullMeta {
   fetchedAt: string;
   /** Approved Najaf stays in the range, whatever their accommodation. */
   approvedStays: number;
+  /** Last night the source search covers, even when no stays were found. */
+  coveredThrough?: string;
   /** Of those, stays where NKERP houses every guest (not planned here). */
   nkerpHousedOnly: number;
   /** Tours in the range that are not approved yet (Pending, Draft…), so not planned. */
@@ -255,4 +257,9 @@ export interface PendingTour {
   /** Guests NKERP houses. */
   housed: number | null;
   remarks: string;
+  departureFlight?: string | null;
+  departureAirline?: string | null;
+  /** Guests on the applicant list whose accommodation choice is unresolved. */
+  unclassified?: number;
+  hotelPaxSource?: 'applicants' | 'tour';
 }

@@ -74,7 +74,7 @@ export const REASON_LABEL: Record<Reason, string> = {
 export const DEPARTURE_DAY_AIRPORTS = /najaf|baghdad/i;
 
 /** True when the group's departure day counts as a night of its stay. */
-export function staysDepartureDay(group: Group, settings: Pick<Settings, 'departureDayRule'>): boolean {
+export function staysDepartureDay(group: Pick<Group, 'secondLeg' | 'departure'>, settings: Pick<Settings, 'departureDayRule'>): boolean {
   if (!settings.departureDayRule) return false;
   const { departure } = group;
   return (
@@ -86,7 +86,7 @@ export function staysDepartureDay(group: Group, settings: Pick<Settings, 'depart
 }
 
 /** Every night the group sleeps in Najaf. */
-export function nightsOf(group: Group, settings: Pick<Settings, 'departureDayRule'>): string[] {
+export function nightsOf(group: Pick<Group, 'checkIn' | 'checkOut' | 'secondLeg' | 'departure'>, settings: Pick<Settings, 'departureDayRule'>): string[] {
   const last = staysDepartureDay(group, settings) ? group.checkOut : addDays(group.checkOut, -1);
   return last < group.checkIn ? [] : eachDate(group.checkIn, last);
 }

@@ -39,6 +39,16 @@ const upper = (value) => clean(value).toUpperCase();
 /** "2026-11-07T11:00:00" → "2026-11-07". NKERP local (Najaf) times. */
 export const dateOf = (stamp) => (typeof stamp === 'string' && stamp.length >= 10 ? stamp.slice(0, 10) : null);
 
+// NKERP's *DateTimeZone fields are local clock times. The bare whole-trip
+// StartDate/EndDate timestamps are UTC, even when the offset is omitted.
+export function tripDate(local, instant) {
+  if (local) return dateOf(local);
+  if (typeof instant !== 'string') return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(instant)) return instant;
+  const timestamp = Date.parse(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(instant) ? instant : instant + 'Z');
+  return Number.isFinite(timestamp) ? new Date(timestamp + 3 * 3_600_000).toISOString().slice(0, 10) : null;
+}
+
 export const sameOffice = (a, b) => upper(a).replace(/[^A-Z0-9]/g, '') === upper(b).replace(/[^A-Z0-9]/g, '');
 
 export function addDays(date, days) {
@@ -220,24 +230,33 @@ export function pendingTour(row, tourPlan, venue = 'najaf') {
       .filter((n) => n.checkIn && n.checkOut);
   const najaf = datesIn('najaf');
   const name = (p) => (upper(p.SubvenueName) === NAJAF ? 'Najaf' : upper(p.SubvenueName) === KARBALA ? 'Karbala' : clean(p.SubvenueName));
-  const count = (value) => (value === null || value === undefined ? null : Number(value) || 0);
+  const count = (value) => value != null && value !== '' && Number.isInteger(Number(value)) && Number(value) >= 0 ? Number(value) : null;
+  const start = tripDate(row?.StartDateTimeZone || t.StartDateTimeZone, t.StartDate || row?.StartDate);
+  const end = tripDate(row?.EndDateTimeZone || t.EndDateTimeZone, t.EndDate || row?.EndDate);
+  const itineraries = row?.lstTransportItinerary?.length ? row.lstTransportItinerary : t.TransportItinerary;
+  const itinerary = start && end ? pickItinerary(itineraries, start, end) : null;
+  const departureFlight = clean(itinerary?.DepartureTransportCode) || null;
+  const summaryPax = count(t.PaxNotRequiredAcc);
   return {
     tourId: row?.TourId ?? t.Id,
     ref,
     tourNo: ref.split('/').pop(),
     status: t.IsReApproval ? 'Awaiting re-approval' : clean(row?.Status) || 'Pending',
     reapproval: Boolean(t.IsReApproval),
-    start: dateOf(row?.StartDate ?? t.StartDate),
-    end: dateOf(row?.EndDate ?? t.EndDate),
+    start,
+    end,
     entryPort: clean(row?.EntryPort ?? t.EntryPortName),
     exitPort: clean(row?.ExitPort ?? t.ExitPortName),
     route: plans.map(name).join(' → '),
     najaf,
     stays: venueOf(venue) === 'najaf' ? najaf : datesIn(venue),
     pax: Number(row?.PaxCount ?? t.PaxCount) || 0,
-    needHotel: count(t.PaxNotRequiredAcc),
+    needHotel: summaryPax,
     housed: count(t.PaxRequiredAcc),
     remarks: clean(t.Remarks),
+    departureFlight,
+    departureAirline: airlineOf(departureFlight),
+    hotelPaxSource: summaryPax !== null ? 'tour' : undefined,
   };
 }
 
