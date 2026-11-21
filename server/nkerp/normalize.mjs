@@ -126,6 +126,17 @@ const activePlans = (row) =>
     .filter((p) => p && p.IsActive !== false && !p.IsRemoved && p.StartDateTimeZone && p.EndDateTimeZone)
     .sort((a, b) => String(a.StartDateTimeZone).localeCompare(String(b.StartDateTimeZone)));
 
+/** Compare the itinerary itself. NKERP can issue new plan IDs for identical dates. */
+export function datedRoute(row, detail) {
+  const plans = detail ? latestPlans(detail) : activePlans(row);
+  return plans.map((p) => ({
+    city: isVenuePlan(p, 'najaf') ? 'Najaf' : isVenuePlan(p, 'karbala') ? 'Karbala' : clean(p.SubvenueName),
+    from: dateOf(p.StartDateTimeZone),
+    to: endDateOf(p.EndDateTimeZone),
+  })).filter((leg) => leg.from && leg.to).sort((a, b) =>
+    a.from.localeCompare(b.from) || a.to.localeCompare(b.to) || a.city.localeCompare(b.city));
+}
+
 function pickItinerary(itineraries, from, to) {
   const list = (itineraries ?? []).filter((it) => it && it.IsActive !== false);
   if (list.length <= 1) return list[0] ?? null;

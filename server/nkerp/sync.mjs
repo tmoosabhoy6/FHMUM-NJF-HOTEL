@@ -9,13 +9,14 @@
  *   3. Guests: each of those tours' guest lists, person by person. A guest
  *      marked "accommodation not required" needs a bed from us, whether or
  *      not the rest of the tour is housed by NKERP.
- *   4. Stays: one per Najaf stay with at least one such guest.
+ *   4. Stays: one per approved stay, including tours that currently need zero beds.
  *
  * Every call is a read (see client.mjs). Progress is reported through `emit`
  * so the loading screen can show it live: a window lights for each day once
  * every tour arriving by that day has been counted.
  */
-import { addDays, countGuests, countsFromTour, daysBetween, isApprovedTour, isLiveTour, pendingTour, sameOffice, staysFromGroupRow, venueOf, withGuests } from './normalize.mjs';
+import { NkerpError } from './client.mjs';
+import { addDays, countGuests, countsFromTour, datedRoute, daysBetween, isApprovedTour, isLiveTour, pendingTour, sameOffice, staysFromGroupRow, venueOf, withGuests } from './normalize.mjs';
 
 export const DEFAULT_OFFICE = 'Fayz E Husayni Trust Mumbai';
 const LOOKBACK_DAYS = 45; // a tour that started this long before the range can still be in Najaf
@@ -43,24 +44,35 @@ async function readTours(client, { office, arrivalFrom, arrivalTo, signal, onPag
       },
       { signal },
     );
-    const chunk = data?.lstGeneralGroupsSearch ?? [];
+    const chunk = data?.lstGeneralGroupsSearch;
+    const total = Number(data?.TotalRows);
+    if (!Array.isArray(chunk) || (!chunk.length && seen < total)) {
+      throw new NkerpError('NKERP returned an incomplete tour list. The saved plan is unchanged.', { code: 'format' });
+    }
     seen += chunk.length;
     rows.push(...chunk.filter((row) => sameOffice(row?.OfficeName, office)));
     onPage(rows.length);
-    const total = Number(data?.TotalRows) || seen;
-    if (!chunk.length || seen >= total) break;
+    if (!chunk.length || seen >= (total || seen)) return rows;
   }
-  return rows;
+  throw new NkerpError('NKERP returned too many pages to finish this pull. Try a shorter date range.', { code: 'format' });
 }
 
 async function readGuests(client, tourId, signal) {
   const path = `api/tours/getApplicants/${Number(tourId)}`;
   try {
-    return (await client.read(path, undefined, { signal }))?.Applicants ?? [];
+    return await read();
   } catch (error) {
     if (signal?.aborted) throw error;
     // One more try: NKERP drops the odd request under load.
-    return (await client.read(path, undefined, { signal }))?.Applicants ?? [];
+    return read();
+  }
+
+  async function read() {
+    const data = await client.read(path, undefined, { signal });
+    if (!data || !Object.hasOwn(data, 'Applicants') || (data.Applicants != null && !Array.isArray(data.Applicants))) {
+      throw new NkerpError('NKERP returned an incomplete guest list. The saved plan is unchanged.', { code: 'format' });
+    }
+    return data.Applicants ?? [];
   }
 }
 
@@ -77,141 +89,158 @@ async function pool(items, size, worker) {
   await Promise.all(Array.from({ length: Math.min(size, items.length) }, run));
 }
 
-/**
- * `venue` is 'najaf' (the default) or 'karbala': the same pull, reading the
- * stays in that city.
- */
-export async function runSync({ client, from, to: toInput = null, office = DEFAULT_OFFICE, venue: venueInput = 'najaf', emit = () => {}, signal }) {
-  const to = toInput || null;
+const otherCity = (venue) => venue === 'najaf' ? 'karbala' : 'najaf';
+const firstDate = (a, b) => a < b ? a : b;
+const lastDate = (a, b) => a > b ? a : b;
+
+function windowFor(venue, { from, to = null }) {
+  const horizon = to ?? addDays(from, MAX_DAYS);
+  return {
+    venue, from, to, horizon,
+    stays: [],
+    pending: [],
+    overlaps: ({ checkIn, checkOut }) => checkOut >= from && checkIn <= horizon,
+  };
+}
+
+/** One read of the office's tours and each relevant guest list serves both city windows. */
+export async function runSync({
+  client, from, to = null, office = DEFAULT_OFFICE, venue: venueInput = 'najaf',
+  otherRange, tracked = [], emit = () => {}, signal,
+}) {
   const venue = venueOf(venueInput);
   const city = venue === 'karbala' ? 'Karbala' : 'Najaf';
+  const primary = windowFor(venue, { from, to });
+  const windows = otherRange ? [primary, windowFor(otherCity(venue), otherRange)] : [primary];
   const started = Date.now();
+  const initialRequests = client.requests;
   const step = (id, status, detail) => emit('step', { id, status, detail });
-  const inRange = (stay) => stay.checkOut >= from && (!to || stay.checkIn <= to);
+  const tourPlans = new Map();
+  const observations = {};
+  const counts = new Map();
+  const trackedIds = new Set(tracked.map((t) => t.tourId));
+  const observe = (id, ref, route) => {
+    observations[id] = { tourNo: String(ref ?? id).split('/').pop(), route };
+  };
+  const readPlan = async (id) => {
+    if (!tourPlans.has(id)) {
+      const data = await client.read(`api/tours/getTourSubVenue/${Number(id)}`, undefined, { signal });
+      if (!data || !Object.hasOwn(data, 'TourPlan')) {
+        throw new NkerpError('NKERP returned incomplete tour dates. The saved plan is unchanged.', { code: 'format' });
+      }
+      tourPlans.set(id, data.TourPlan);
+    }
+    return tourPlans.get(id);
+  };
 
   step('signin', 'active', 'Signing in to NKERP');
   await client.login({ signal });
   step('signin', 'done', 'Signed in');
-
-  // ---- tours ---------------------------------------------------------------
   step('tours', 'active', 'Reading the office’s tours');
   const rows = await readTours(client, {
     office,
-    arrivalFrom: addDays(from, -LOOKBACK_DAYS),
-    arrivalTo: to ?? addDays(from, MAX_DAYS),
+    arrivalFrom: addDays(windows.map((w) => w.from).reduce(firstDate), -LOOKBACK_DAYS),
+    arrivalTo: windows.map((w) => w.horizon).reduce(lastDate),
     signal,
     onPage: (n) => step('tours', 'active', `Reading the office’s tours (${n} found)`),
   });
-  const byTour = new Map();
-  const horizon = to ?? addDays(from, MAX_DAYS);
+  const byId = new Map(rows.filter((r) => Number(r.TourId) > 0).map((r) => [Number(r.TourId), r]));
   const pending = [];
-  for (const row of rows) {
+  for (const [id, row] of byId) {
     if (isApprovedTour(row)) {
-      const stays = staysFromGroupRow(row, venue).filter(inRange);
-      if (stays.length) byTour.set(row.TourId, stays);
-      continue;
+      if (Array.isArray(row.lstSubVenuePlan)) observe(id, row.ReferenceNo, datedRoute(row));
+      for (const w of windows) w.stays.push(...staysFromGroupRow(row, w.venue).filter(w.overlaps));
+    } else if (isLiveTour(row)) {
+      const start = String(row.StartDate ?? '').slice(0, 10);
+      const end = String(row.EndDate ?? '').slice(0, 10);
+      const within = windows.filter((w) => start && start <= w.horizon && (!end || end >= w.from));
+      if (within.length || trackedIds.has(id)) pending.push({ id, row, within });
     }
-    // Not approved (Pending, Draft…): it may be an approved tour that was updated and awaits re-approval.
-    const start = String(row?.StartDate ?? '').slice(0, 10);
-    const end = String(row?.EndDate ?? '').slice(0, 10);
-    if (isLiveTour(row) && start && start <= horizon && (!end || end >= from)) pending.push(row);
   }
+  if (pending.length) step('tours', 'active', `Reading ${pending.length} pending tours`);
+  await pool(pending, POOL, async ({ id, row, within }) => {
+    const detail = await readPlan(id);
+    if (Array.isArray(detail?.TourSubvenuePlan)) observe(id, row.ReferenceNo, datedRoute(row, detail));
+    for (const w of within) w.pending.push(pendingTour(row, detail, w.venue));
+  });
 
-  // Tours not approved (Pending, Draft…), including approved tours that were updated and wait for
-  // re-approval: listed for information with what NKERP says about them, not planned. General search
-  // shows them with no plans, so their plans are read. They join the plan once NKERP approves them.
-  let notApproved = 0;
-  let reapproval = 0;
-  const waiting = [];
-  const tourPlans = new Map(); // tour plans already read, reused when a guest list is empty
-  if (pending.length) {
-    step('tours', 'active', `Reading ${pending.length} pending tours`);
-    await pool(pending, POOL, async (row) => {
-      const data = await client.read(`api/tours/getTourSubVenue/${Number(row.TourId)}`, undefined, { signal });
-      tourPlans.set(row.TourId, data?.TourPlan);
-      notApproved += 1;
-      if (data?.TourPlan?.IsReApproval) reapproval += 1;
-      waiting.push(pendingTour(row, data?.TourPlan, venue));
-    });
-  }
-  const tours = [...byTour.entries()]
-    .map(([tourId, stays]) => ({ tourId, stays, first: stays.reduce((min, s) => (s.checkIn < min ? s.checkIn : min), stays[0].checkIn) }))
-    .sort((a, b) => a.first.localeCompare(b.first));
-  const approvedStays = tours.reduce((sum, t) => sum + t.stays.length, 0);
-  step(
-    'tours',
-    'done',
-    `${tours.length} approved tours staying in ${city}${notApproved ? `, ${notApproved} pending in NKERP${reapproval ? ` (${reapproval} awaiting re-approval)` : ''}` : ''}`,
-  );
+  // A rescheduled tour may leave both search windows. Read its itinerary by
+  // exact ID so the refresh can still report the move out of the plan.
+  const missing = tracked.filter((t) => !byId.has(t.tourId) && windows.some((w) => w.venue === t.venue && w.overlaps(t)));
+  await pool([...new Map(missing.map((t) => [t.tourId, t])).values()], POOL, async (t) => {
+    const detail = await readPlan(t.tourId);
+    if (Array.isArray(detail?.TourSubvenuePlan)) observe(t.tourId, detail.ReferenceNo || t.tourNo, datedRoute(null, detail));
+  });
 
-  // ---- the days the loading screen shows -----------------------------------
-  const lastOut = tours.flatMap((t) => t.stays).reduce((max, s) => (s.checkOut > max ? s.checkOut : max), from);
-  let end = to ?? lastOut;
-  if (daysBetween(from, end) > MAX_DAYS) end = addDays(from, MAX_DAYS);
+  const primaryIds = new Set(primary.stays.map((s) => Number(s.tourId)));
+  const pendingReapproval = primary.pending.filter((t) => t.reapproval).length;
+  step('tours', 'done', `${primaryIds.size} approved tours staying in ${city}${primary.pending.length ? `, ${primary.pending.length} pending in NKERP${pendingReapproval ? ` (${pendingReapproval} awaiting re-approval)` : ''}` : ''}`);
+
+  const endOf = (w) => w.to ?? w.stays.reduce((end, stay) => lastDate(end, stay.checkOut), w.from);
+  const end = firstDate(endOf(primary), addDays(from, MAX_DAYS));
   const days = [];
-  for (let d = from; d <= end; d = addDays(d, 1)) days.push(d);
+  for (let day = from; day <= end; day = addDays(day, 1)) days.push(day);
   emit('days', { dates: days });
 
-  // ---- guests, tour by tour ------------------------------------------------
+  const firstById = new Map();
+  for (const stay of windows.flatMap((w) => w.stays)) {
+    const id = Number(stay.tourId);
+    firstById.set(id, firstDate(firstById.get(id) ?? stay.checkIn, stay.checkIn));
+  }
+  const tours = [...firstById].sort((a, b) => a[1].localeCompare(b[1]));
   step('guests', 'active', `Counting guests on ${tours.length} tours`);
-  const done = new Set();
   const counted = [];
   let lit = 0;
   const light = (through) => {
     while (lit < days.length && days[lit] <= through) {
-      const date = days[lit];
+      const date = days[lit++];
       const sum = (field) => counted.filter((s) => s[field] === date).reduce((n, s) => n + s.pax, 0);
-      lit += 1;
       emit('day', { date, read: lit, total: days.length, arriving: sum('checkIn'), leaving: sum('checkOut') });
     }
   };
-  await pool(tours, POOL, async (tour) => {
-    let counts = countGuests(await readGuests(client, tour.tourId, signal));
-    if (!counts.total) {
-      // Approved, but NKERP has no guest list for it yet: use the tour's own totals.
-      let plan = tourPlans.get(tour.tourId);
-      if (plan === undefined) plan = (await client.read(`api/tours/getTourSubVenue/${Number(tour.tourId)}`, undefined, { signal }))?.TourPlan;
-      if (plan) counts = countsFromTour(plan);
+  await pool(tours, POOL, async ([id]) => {
+    let guests = countGuests(await readGuests(client, id, signal));
+    if (!guests.total) {
+      const detail = await readPlan(id);
+      if (detail) guests = countsFromTour(detail);
     }
-    for (const stay of tour.stays) counted.push(withGuests(stay, counts));
-    done.add(tour.tourId);
+    counts.set(id, guests);
+    if (primaryIds.has(id)) counted.push(...primary.stays.filter((s) => Number(s.tourId) === id).map((s) => withGuests(s, guests)));
     const selfHoused = counted.filter((s) => s.pax > 0);
-    emit('tours', { approved: approvedStays, selfHoused: selfHoused.length, guests: selfHoused.reduce((n, s) => n + s.pax, 0) });
-    step('guests', 'active', `Counting guests (${done.size} of ${tours.length} tours)`);
-    // Every tour arriving before the earliest unfinished one is counted, so those days are complete.
-    const waiting = tours.find((t) => !done.has(t.tourId));
-    light(waiting ? addDays(waiting.first, -1) : end);
+    emit('tours', { approved: primary.stays.length, selfHoused: selfHoused.length, guests: selfHoused.reduce((n, s) => n + s.pax, 0) });
+    step('guests', 'active', `Counting guests (${counts.size} of ${tours.length} tours)`);
+    const waiting = tours.find(([id]) => !counts.has(id) && primaryIds.has(id));
+    light(waiting ? addDays(waiting[1], -1) : end);
   });
   light(end);
-  const groups = counted
-    .filter((s) => s.pax > 0)
-    .sort((a, b) => a.checkIn.localeCompare(b.checkIn) || (a.arrivalAt ?? '').localeCompare(b.arrivalAt ?? '') || a.tourNo.localeCompare(b.tourNo, undefined, { numeric: true }));
-  const mixed = groups.filter((s) => s.paxNkerpHoused > 0).length;
-  step('guests', 'done', `${groups.length} stays with guests who need a hotel${mixed ? ` (${mixed} of them part-housed by NKERP)` : ''}`);
-
-  // ---- stays ---------------------------------------------------------------
+  step('guests', 'done', `${counted.filter((s) => s.pax > 0).length} stays with guests who need a hotel`);
   step('match', 'active', 'Building the stays');
-  const iraqi = groups.filter((s) => s.departure.airline === 'IA').length;
-  step('match', 'done', `${groups.length} groups ready, ${iraqi} leaving on Iraqi Airways`);
 
-  return {
-    groups,
-    meta: {
-      source: 'nkerp',
-      venue,
-      office,
-      from,
-      to,
-      through: groups.reduce((max, s) => (s.checkOut > max ? s.checkOut : max), end),
-      fetchedAt: new Date().toISOString(),
-      approvedStays,
-      nkerpHousedOnly: counted.filter((s) => s.pax === 0).length,
-      notApproved,
-      reapproval,
-      pending: waiting.sort((a, b) => String(a.start).localeCompare(String(b.start)) || a.tourNo.localeCompare(b.tourNo, undefined, { numeric: true })),
-      toursRead: tours.length,
-      requests: client.requests,
-      seconds: Math.round((Date.now() - started) / 100) / 10,
-    },
-  };
+  const fetchedAt = new Date().toISOString();
+  const datasets = windows.map((w) => {
+    const groups = w.stays.map((s) => withGuests(s, counts.get(Number(s.tourId))))
+      .sort((a, b) => a.checkIn.localeCompare(b.checkIn) || (a.arrivalAt ?? '').localeCompare(b.arrivalAt ?? '') || a.tourNo.localeCompare(b.tourNo, undefined, { numeric: true }));
+    return {
+      groups,
+      meta: {
+        source: 'nkerp',
+        venue: w.venue,
+        office,
+        from: w.from,
+        to: w.to,
+        through: endOf(w),
+        fetchedAt,
+        approvedStays: groups.length,
+        nkerpHousedOnly: groups.filter((g) => g.pax === 0).length,
+        notApproved: w.pending.length,
+        reapproval: w.pending.filter((t) => t.reapproval).length,
+        pending: w.pending.sort((a, b) => String(a.start).localeCompare(String(b.start)) || a.tourNo.localeCompare(b.tourNo, undefined, { numeric: true })),
+        toursRead: new Set(groups.map((g) => g.tourId)).size,
+        requests: client.requests - initialRequests,
+        seconds: Math.round((Date.now() - started) / 100) / 10,
+      },
+    };
+  });
+  step('match', 'done', `${datasets[0].groups.filter((s) => s.pax > 0).length} groups ready`);
+  return { ...datasets[0], companion: datasets[1], observations };
 }

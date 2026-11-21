@@ -8,12 +8,12 @@
  * The NKERP login comes from the Worker's secrets NKERP_LOGIN_ID and
  * NKERP_PASSWORD. The app itself has no login: anyone with the link can use it.
  */
-import { NkerpError, sharedClient } from '../server/nkerp/client.mjs';
-import { DEFAULT_OFFICE, runSync } from '../server/nkerp/sync.mjs';
+import { NkerpClient, NkerpError } from '../server/nkerp/client.mjs';
+import { DEFAULT_OFFICE } from '../server/nkerp/sync.mjs';
+import { refreshFromNkerp, validPullRange } from '../server/pull.mjs';
 import { d1Store, handleState } from '../server/state.mjs';
 import { FILES } from './assets.generated.mjs';
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const json = (status, body) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
 
@@ -22,7 +22,7 @@ function sync(url, env, ctx) {
   const to = url.searchParams.get('to') || null;
   const venue = url.searchParams.get('venue') || 'najaf';
   if (venue !== 'najaf' && venue !== 'karbala') return json(400, { error: 'Unknown city' });
-  if (!ISO_DATE.test(from) || (to && !ISO_DATE.test(to)) || (to && to < from)) {
+  if (!validPullRange(from, to)) {
     return json(400, { error: 'Choose a start date, and an end date that is not before it.' });
   }
 
@@ -44,8 +44,9 @@ function sync(url, env, ctx) {
 
   const work = (async () => {
     try {
-      const result = await runSync({
-        client: sharedClient(env),
+      const result = await refreshFromNkerp({
+        store: d1Store(env.DB),
+        client: new NkerpClient({ loginId: env.NKERP_LOGIN_ID, password: env.NKERP_PASSWORD, baseUrl: env.NKERP_BASE_URL }),
         from,
         to,
         venue,
@@ -111,7 +112,10 @@ export default {
     if (url.pathname === '/api/health') {
       return json(200, { ok: true, nkerp: Boolean(env.NKERP_LOGIN_ID && env.NKERP_PASSWORD), office: env.NKERP_OFFICE_NAME || DEFAULT_OFFICE });
     }
-    if (url.pathname === '/api/sync') return sync(url, env, ctx);
+    if (url.pathname === '/api/sync') {
+      if (!env.DB) return json(503, { error: 'Shared storage is not set up' });
+      return sync(url, env, ctx);
+    }
     return json(404, { error: 'Not found' });
   },
 };

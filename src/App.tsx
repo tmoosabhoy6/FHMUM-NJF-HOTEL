@@ -3,29 +3,24 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { OPENING_BALANCE, PLANNING_START, RUYA_WITHHELD, ruyaRooms } from '../shared/config';
 import { dayMonth, fullDate } from '../shared/dates';
 import { buildPlan, hotelNames } from '../shared/engine';
-import type { Group, GroupInput, PullMeta, Settings } from '../shared/types';
+import type { Group, Settings } from '../shared/types';
 import { HotelMessages } from './components/HotelMessages';
 import { SettingsDrawer, type Prefs } from './components/SettingsDrawer';
 import { Brand, CityTabs } from './components/ui';
 import { exportPlan } from './lib/export';
-import { inputKey } from './lib/inputs';
+import { editInput, inputKey, legacyKey, tourInput, withHotelPax, type InputChange, type TourInputs } from './lib/inputs';
 import { useKarbala } from './lib/karbala';
 import { NamesContext } from './lib/names';
 import { SharedState, type SaveStatus, type Values } from './lib/shared';
-import { load, remove, save } from './lib/storage';
-import { checkServer, emptyProgress, startPull, type PullProgress, type ServerState } from './lib/sync';
+import { load, save } from './lib/storage';
+import { checkServer, emptyProgress, startPull, type PullProgress, type PullResult, type ServerState } from './lib/sync';
 import { KarbalaView } from './screens/Karbala';
 import { Night } from './screens/Night';
 import { PlanView } from './screens/PlanView';
 
-interface Dataset {
-  groups: Group[];
-  meta: PullMeta;
-}
-
 // v2: guests are counted person by person, and room requests are written bed size first.
 // Local copies only: the shared copy everyone sees is on the server (lib/shared.ts).
-const KEY = { data: 'njf.dataset.v2', inputs: 'njf.inputs.v2', applied: 'njf.applied.v2', prefs: 'njf.prefs.v2', range: 'njf.range.v2', merged: 'njf.shared.v1', tab: 'fh.tab.v1' };
+const KEY = { data: 'njf.dataset.v2', inputs: 'njf.inputs.v2', prefs: 'njf.prefs.v2', range: 'njf.range.v2', tab: 'fh.tab.v1' };
 const POLL_MS = 15_000;
 
 const DEFAULT_PREFS: Prefs = { arafCapacity: 100, departureDayRule: true, withheld: RUYA_WITHHELD };
@@ -40,15 +35,17 @@ function ago(iso: string): string {
 }
 
 export function App() {
-  const [dataset, setDataset] = useState<Dataset | null>(() => load<Dataset | null>(KEY.data, null));
-  // What staff have typed (shown in the Groups table straight away) and what the plan was last built from.
-  // The plan only changes when "Refresh plan" copies the one into the other.
-  const [typed, setTyped] = useState<Record<string, GroupInput>>(() => load(KEY.inputs, {}));
-  const [applied, setApplied] = useState<Record<string, GroupInput>>(() => load(KEY.applied, load(KEY.inputs, {})));
-  const [refreshed, setRefreshed] = useState(false);
+  const [savedDataset, setSavedDataset] = useState<PullResult | null>(() => {
+    const data = load<PullResult | null>(KEY.data, null);
+    return data?.meta.source === 'nkerp' ? data : null;
+  });
+  const [sample, setSample] = useState<PullResult | null>(null);
+  const [sampleInputs, setSampleInputs] = useState<TourInputs>({});
+  const dataset = sample ?? savedDataset;
+  const [typed, setTyped] = useState<TourInputs>(() => load(KEY.inputs, {}));
   const [prefs, setPrefs] = useState<Prefs>(() => ({ ...DEFAULT_PREFS, ...load<Partial<Prefs>>(KEY.prefs, {}) }));
   const [range, setRange] = useState(() => load(KEY.range, { from: PLANNING_START, to: '' }));
-  const [screen, setScreen] = useState<'start' | 'pulling' | 'failed' | 'app'>(() => (load<Dataset | null>(KEY.data, null) ? 'app' : 'start'));
+  const [screen, setScreen] = useState<'start' | 'pulling' | 'failed' | 'app'>(() => (savedDataset ? 'app' : 'start'));
   const [progress, setProgress] = useState<PullProgress>(emptyProgress);
   const [error, setError] = useState<string | null>(null);
   const [server, setServer] = useState<ServerState>('checking');
@@ -62,91 +59,54 @@ export function App() {
   // Which city is open (per device). Karbala is the message generator only (screens/Karbala.tsx).
   const [tab, setTab] = useState<'najaf' | 'karbala'>(() => (load<string>(KEY.tab, 'najaf') === 'karbala' ? 'karbala' : 'najaf'));
   useEffect(() => save(KEY.tab, tab), [tab]);
-  const karbala = useKarbala(shared, loaded, range);
+  const pollNow = useRef<() => void>(() => {});
+  const karbala = useKarbala(shared, range, () => pollNow.current());
   const karbalaApply = useRef(karbala.apply);
   karbalaApply.current = karbala.apply;
-  // The latest values, for the poll and for typing (which works from the current room requests).
-  const latest = useRef({ dataset, typed, applied, prefs, range, screen });
-  latest.current = { dataset, typed, applied, prefs, range, screen };
+  const latest = useRef({ savedDataset, screen });
+  latest.current = { savedDataset, screen };
 
   useEffect(() => {
     checkServer().then(setServer);
-    // Data saved by the first version is in an older shape: drop it.
-    for (const old of ['njf.dataset.v1', 'njf.inputs.v1', 'njf.settings.v1', 'njf.range.v1']) remove(old);
   }, []);
   useEffect(() => save(KEY.inputs, typed), [typed]);
-  useEffect(() => save(KEY.applied, applied), [applied]);
   useEffect(() => save(KEY.prefs, prefs), [prefs]);
   useEffect(() => save(KEY.range, range), [range]);
-  // Settings and the date range go to the shared copy as they change (once it has been read).
-  useEffect(() => {
-    if (loaded) shared.put('prefs', prefs);
-  }, [loaded, prefs, shared]);
-  useEffect(() => {
-    if (loaded) shared.put('range', range);
-  }, [loaded, range, shared]);
 
-  // ---- the shared copy: read it, keep reading other devices' changes -------
   useEffect(() => {
     shared.onStatus = setSaveStatus;
     let stopped = false;
-    const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
-    const apply = (values: Values, first: boolean) => {
-      const now = latest.current;
-      if ('dataset' in values && values.dataset && !same(values.dataset, now.dataset)) {
-        const next = values.dataset as Dataset;
+    let first = true;
+    const apply = (values: Values) => {
+      const next = values.dataset as PullResult | undefined;
+      if (next?.meta.source === 'nkerp' && next.meta.fetchedAt >= (latest.current.savedDataset?.meta.fetchedAt ?? '')) {
+        if (!latest.current.savedDataset && latest.current.screen === 'start') setScreen('app');
+        latest.current.savedDataset = next;
         save(KEY.data, next);
-        setDataset(next);
-        if (first && now.screen === 'start') setScreen('app');
+        setSavedDataset(next);
       }
-      if ('inputs' in values) {
-        const next = { ...(values.inputs as Record<string, GroupInput>) };
-        for (const [k, v] of Object.entries(shared.pendingFields('inputs'))) {
-          if (v === null) delete next[k];
-          else next[k] = v as GroupInput;
-        }
-        if (!same(next, now.typed)) setTyped(next);
-      }
-      if ('applied' in values && !shared.busy('applied') && !same(values.applied, now.applied)) setApplied((values.applied ?? {}) as Record<string, GroupInput>);
-      if ('prefs' in values && !shared.busy('prefs')) {
-        const next = { ...DEFAULT_PREFS, ...(values.prefs as Partial<Prefs>) };
-        if (!same(next, now.prefs)) setPrefs(next);
-      }
-      if ('range' in values && values.range && !shared.busy('range') && !same(values.range, now.range)) setRange(values.range as typeof now.range);
-      karbalaApply.current(values);
-    };
-    const first = async () => {
-      let values = await shared.poll();
-      while (!values && !stopped) {
-        // Server unreachable: keep working from this device's copy and try again.
-        await new Promise((r) => window.setTimeout(r, 5_000));
-        values = await shared.poll();
-      }
-      if (stopped || !values) return;
-      const now = latest.current;
-      // This device's own earlier work (from before sharing) goes up once: whole keys the server lacks,
-      // and room requests for tours the server has nothing for.
-      if (!load(KEY.merged, false)) {
-        if (values.dataset === undefined && now.dataset) shared.put('dataset', now.dataset);
-        if (values.applied === undefined && Object.keys(now.applied).length) shared.put('applied', now.applied);
-        const server = (values.inputs ?? {}) as Record<string, GroupInput>;
-        for (const [k, v] of Object.entries(now.typed)) if (!(k in server)) shared.patch('inputs', k, v);
-        if (values.prefs === undefined) values.prefs = now.prefs;
-        if (values.range === undefined) values.range = now.range;
-        save(KEY.merged, true);
-      }
-      apply(values, true);
+      if ('inputs' in values || first) setTyped(shared.withPending('inputs', (values.inputs ?? {}) as TourInputs));
+      if ('prefs' in values && !shared.pending('prefs')) setPrefs({ ...DEFAULT_PREFS, ...values.prefs as Partial<Prefs> });
+      if (values.range && !shared.pending('range')) setRange(values.range as typeof range);
+      karbalaApply.current(values, first);
+      first = false;
       setLoaded(true);
     };
-    void first();
     const tick = async () => {
-      if (!stopped && latest.current && document.visibilityState !== 'hidden') {
-        const values = await shared.poll();
-        if (values && !stopped) apply(values, false);
+      const values = await shared.poll();
+      if (values && !stopped) {
+        const initial = first;
+        apply(values);
+        if (initial) shared.resume();
       }
     };
-    const timer = window.setInterval(tick, POLL_MS);
-    const onFocus = () => void tick();
+    pollNow.current = () => void tick();
+    void tick();
+    const onFocus = () => {
+      if (document.visibilityState !== 'hidden') void tick();
+      else void shared.flush(true);
+    };
+    const timer = window.setInterval(onFocus, POLL_MS);
     const onHide = () => void shared.flush(true);
     window.addEventListener('focus', onFocus);
     document.addEventListener('visibilitychange', onFocus);
@@ -160,6 +120,11 @@ export function App() {
     };
   }, [shared]);
   useEffect(() => () => cancel.current?.(), []);
+
+  const changeRange = (next: typeof range) => {
+    setRange(next);
+    shared.put('range', next);
+  };
 
   const settings = useMemo<Settings>(() => {
     const rooms = ruyaRooms(prefs.withheld);
@@ -184,61 +149,49 @@ export function App() {
         {
           onProgress: (update) => setProgress(update),
           onDone: (result) => {
-            save(KEY.data, result);
-            shared.put('dataset', result);
-            // Let the last windows light before the night lifts.
-            window.setTimeout(() => {
-              setDataset(result);
-              setScreen('app');
-            }, 900);
+            cancel.current = null;
+            if (result.meta.source === 'sample') {
+              setSample(result);
+            } else {
+              setSample(null);
+              latest.current.savedDataset = result;
+              save(KEY.data, result);
+              setSavedDataset(result);
+              pollNow.current();
+            }
+            setScreen('app');
           },
           onFailed: (message) => {
             setError(message);
             setScreen('failed');
+            pollNow.current();
           },
         },
       );
     },
-    [range, shared],
+    [range],
   );
 
-  const groups = useMemo(() => dataset?.groups ?? [], [dataset]);
-  const inputs = useMemo(() => Object.fromEntries(groups.map((g) => [g.id, typed[inputKey(g)]])), [groups, typed]);
-  const appliedInputs = useMemo(() => Object.fromEntries(groups.map((g) => [g.id, applied[inputKey(g)]])), [groups, applied]);
+  const activeInputs = sample ? sampleInputs : typed;
+  const groups = useMemo(() => withHotelPax(dataset?.groups ?? [], activeInputs, dataset?.meta), [dataset, activeInputs]);
+  const inputs = useMemo(() => Object.fromEntries(groups.map((g) => [g.id, tourInput(activeInputs, g, dataset?.meta)])), [groups, activeInputs, dataset]);
   const plan = useMemo(
     () =>
       dataset
-        ? buildPlan({ groups, inputs: appliedInputs, settings, holds: OPENING_BALANCE, from: dataset.meta.from, to: dataset.meta.to, start: PLANNING_START })
+        ? buildPlan({ groups, inputs, settings, holds: OPENING_BALANCE, from: dataset.meta.from, to: dataset.meta.to, start: PLANNING_START })
         : null,
-    [dataset, groups, appliedInputs, settings],
+    [dataset, groups, inputs, settings],
   );
-  /** Tours whose typed rooms or hotel differ from what the plan was built with. */
-  const pending = useMemo(() => {
-    // Only tours in this pull can change the plan.
-    const keys = new Set(groups.map(inputKey));
-    return [...keys].filter((k) => JSON.stringify(typed[k] ?? {}) !== JSON.stringify(applied[k] ?? {})).length;
-  }, [groups, typed, applied]);
-  const refresh = useCallback(() => {
-    setApplied(typed);
-    shared.put('applied', typed);
-    setRefreshed(true);
-    window.setTimeout(() => setRefreshed(false), 2400);
-  }, [typed, shared]);
 
-  const onInput = useCallback((tourNo: string, patch: GroupInput) => {
-    const key = inputKey({ tourNo });
-    const all = latest.current.typed;
-    const next: GroupInput = { ...all[key], ...patch };
-    if (!next.spec?.trim()) delete next.spec;
-    if (!next.pin) delete next.pin;
-    if (!next.roomNos?.length) delete next.roomNos;
-    const copy = { ...all };
-    if (Object.keys(next).length) copy[key] = next;
-    else delete copy[key];
-    latest.current.typed = copy;
-    setTyped(copy);
-    shared.patch('inputs', key, Object.keys(next).length ? next : null);
-  }, [shared]);
+  const onInput = (group: Group, changes: InputChange) => {
+    const legacy = legacyKey(group, dataset?.meta);
+    const update = (all: TourInputs) => editInput(all, inputKey(group), legacy, changes);
+    if (sample) setSampleInputs(update);
+    else {
+      setTyped(update);
+      shared.edit('inputs', group, legacy, changes);
+    }
+  };
 
   const names = settings.names ?? hotelNames();
   const night = screen !== 'app';
@@ -267,15 +220,11 @@ export function App() {
                   {dataset.meta.to ? ` to ${dayMonth(dataset.meta.to)}` : ''}
                 </b>
                 Pulled {ago(dataset.meta.fetchedAt)}
-                <span className="save-status" data-status={saveStatus} title="Room requests, hotel choices and settings are shared by every device and link">
-                  {saveStatus === 'saving' ? ' · Saving…' : saveStatus === 'offline' ? ' · Not saved yet, retrying' : loaded ? ' · Saved for everyone' : ''}
+                <span className="save-status" data-status={saveStatus} title="Hotel pax, room requests and hotel choices are shared by every device">
+                  {sample ? ' · Sample only' : saveStatus === 'saving' ? ' · Saving…' : saveStatus === 'offline' ? ' · Not saved yet, retrying' : loaded ? ' · Saved for everyone' : ''}
                 </span>
               </div>
               <div className="top-actions">
-                <button className="btn refresh" data-pending={pending > 0} onClick={refresh} title="Rebuild the plan with the room requests and choices made since the last refresh">
-                  {refreshed && !pending ? 'Plan refreshed' : 'Refresh plan'}
-                  {pending ? <span className="badge">{pending}</span> : null}
-                </button>
                 <button className="btn" onClick={() => setPanel('messages')}>
                   Hotel messages
                 </button>
@@ -309,27 +258,6 @@ export function App() {
               </div>
             </div>
           </header>
-          <AnimatePresence initial={false}>
-            {pending ? (
-              <motion.div
-                key="pending"
-                className="pending-bar"
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                <div className="pending-inner">
-                  <span>
-                    Rooms or hotel choices changed for {pending} {pending === 1 ? 'tour' : 'tours'}. The plan below does not include them yet.
-                  </span>
-                  <button className="btn solid" onClick={refresh}>
-                    Refresh plan
-                  </button>
-                </div>
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
           {dataset.meta.source === 'sample' ? (
             <div className="banner">Sample groups, not NKERP. Pull again to load the real tours.</div>
           ) : null}
@@ -349,20 +277,22 @@ export function App() {
             key="settings"
             prefs={prefs}
             beds={settings.ruyaCapacity}
-            onChange={setPrefs}
+            onChange={(next) => {
+              setPrefs(next);
+              shared.put('prefs', next);
+            }}
             onClose={() => setPanel(null)}
-            typedCount={Object.keys(typed).length}
+            typedCount={Object.values(activeInputs).filter((input) => Object.keys(input).length).length}
             onClearInputs={() => {
-              setTyped({});
-              setApplied({});
-              remove(KEY.inputs);
-              remove(KEY.applied);
-              shared.put('inputs', {});
-              shared.put('applied', {});
+              if (sample) setSampleInputs({});
+              else {
+                setTyped({});
+                shared.put('inputs', {});
+              }
             }}
           />
         ) : panel === 'messages' && plan ? (
-          <HotelMessages key="messages" groups={groups} plan={plan} pending={pending} onRefresh={refresh} onClose={() => setPanel(null)} />
+          <HotelMessages key="messages" groups={groups} plan={plan} onClose={() => setPanel(null)} />
         ) : null}
       </AnimatePresence>
 
@@ -374,8 +304,8 @@ export function App() {
             mode={screen === 'pulling' ? 'pulling' : screen === 'failed' ? 'failed' : 'start'}
             from={range.from}
             to={range.to}
-            onFrom={(from) => setRange((r) => ({ from, to: r.to && r.to < from ? '' : r.to }))}
-            onTo={(to) => setRange((r) => ({ ...r, to }))}
+            onFrom={(from) => changeRange({ from, to: range.to && range.to < from ? '' : range.to })}
+            onTo={(to) => changeRange({ ...range, to })}
             onPull={pull}
             onCancel={() => {
               cancel.current?.();

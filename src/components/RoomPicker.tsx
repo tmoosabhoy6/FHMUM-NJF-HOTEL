@@ -11,18 +11,19 @@ interface Props {
   groups: Group[];
   /** Rooms already chosen by hand for this group, if any. */
   current: string[] | undefined;
-  onSave: (roomNos: string[] | undefined) => void;
+  onChange: (roomNos: string[] | undefined) => void;
   onClose: () => void;
 }
 
 type Busy = { who: string; fixed: boolean; from: string; to: string };
 
 /** Choose a group's exact Ruya rooms. Rooms held by hand or from November cannot be taken; rooms the planner gave someone else can. */
-export function RoomPicker({ group, plan, groups, current, onSave, onClose }: Props) {
+export function RoomPicker({ group, plan, groups, current, onChange, onClose }: Props) {
   const names = useNames();
   const placement: Placement | undefined = plan.placements[group.id];
   const nights = placement?.nights ?? [];
-  const [picked, setPicked] = useState<string[]>(() => current ?? (placement?.hotel === 'ruya' ? placement.rooms.map((r) => r.label) : []));
+  const [edited, setEdited] = useState(false);
+  const picked = current ?? (!edited && placement?.hotel === 'ruya' ? placement.rooms.map((r) => r.label) : []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -55,7 +56,13 @@ export function RoomPicker({ group, plan, groups, current, onSave, onClose }: Pr
   const beds = RUYA_SHEET.filter((r) => chosen.has(r.no)).reduce((n, r) => n + r.beds, 0);
   const floors = [...new Set(RUYA_SHEET.map((r) => r.floor))];
   const moves = [...new Set(picked.map((no) => busy.get(no)).filter((b): b is Busy => Boolean(b && !b.fixed)).map((b) => b.who))];
-  const toggle = (no: string) => setPicked((list) => (list.includes(no) ? list.filter((n) => n !== no) : [...list, no].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))));
+  const changeRooms = (next: string[]) => {
+    setEdited(true);
+    onChange(next.length ? next : undefined);
+  };
+  const toggle = (no: string) => changeRooms(chosen.has(no)
+    ? picked.filter((n) => n !== no)
+    : [...picked, no].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })));
 
   return (
     <>
@@ -73,7 +80,7 @@ export function RoomPicker({ group, plan, groups, current, onSave, onClose }: Pr
         <div className="drawer-head">
           <h2>Rooms for tour {group.tourNo}</h2>
           <button className="btn quiet" onClick={onClose}>
-            Cancel
+            Done
           </button>
         </div>
         <div className="drawer-body">
@@ -81,7 +88,7 @@ export function RoomPicker({ group, plan, groups, current, onSave, onClose }: Pr
             <p>
               {group.leader ? `${group.leader}, ` : ''}
               {group.pax} guests, {nights.length ? rangeLabel(nights[0], nights[nights.length - 1]) : 'no nights'} ({nights.length}{' '}
-              {nights.length === 1 ? 'night' : 'nights'}). Tap rooms to choose them. Rooms marked with a tour are taken on some of these nights.
+              {nights.length === 1 ? 'night' : 'nights'}). Room choices save as you make them. Rooms marked with a tour are taken on some of these nights.
             </p>
             <div className="floors picker">
               {floors.map((floor) => (
@@ -147,29 +154,13 @@ export function RoomPicker({ group, plan, groups, current, onSave, onClose }: Pr
             </p>
             {picked.length && beds < group.pax ? <p className="pick-warn">These rooms sleep {beds}; the group is {group.pax}.</p> : null}
             {moves.length ? <p className="pick-note">{moves.join(', ')} will be moved to other rooms or to {names.araf}.</p> : null}
-            <div className="room-actions">
-              <button
-                className="btn solid"
-                disabled={!picked.length}
-                onClick={() => {
-                  onSave(picked);
-                  onClose();
-                }}
-              >
-                Save these rooms
-              </button>
-              {current?.length ? (
-                <button
-                  className="btn"
-                  onClick={() => {
-                    onSave(undefined);
-                    onClose();
-                  }}
-                >
+            {current?.length ? (
+              <div className="room-actions">
+                <button className="btn" onClick={() => changeRooms([])}>
                   Let the planner choose
                 </button>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
             {nights.length ? <p className="pick-small">Checked against every night from {dayMonth(nights[0])} to {dayMonth(nights[nights.length - 1])}.</p> : null}
           </section>
         </div>

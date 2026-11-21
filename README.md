@@ -24,15 +24,14 @@ login of its own: anyone with the link can use it.
 `npm run build` builds the app and bundles it into the Worker
 (`scripts/embed-assets.mjs`); `npm run deploy` builds and deploys.
 
-**Saved for everyone.** The last pull, room requests, hotel choices, what the
-plan was last refreshed with, hotel settings and the date range are kept in a
-Cloudflare D1 database (`najaf-stays`, binding `DB`, `server/state.mjs`), not
-in the browser, so every device and link sees the same thing. Each device
-checks for others' changes every 15 seconds and when it is brought back into
-view; room requests are saved tour by tour, so two people typing for different
-tours never overwrite each other. The header shows "Saved for everyone" (or
-"Not saved yet, retrying" when the server cannot be reached). `npm run dev`
-keeps the same data in `.data/state.json`.
+**Saved for everyone.** Both city views, hotel pax overrides, room requests,
+hotel choices, settings and date ranges are stored in the shared Cloudflare
+D1 database (`najaf-stays`, binding `DB`, `server/state.mjs`). Edits save as
+you make them, and Najaf's allocation and Karbala's messages update immediately.
+Devices read the shared copy when opened or brought back into view, and every
+15 seconds while active. Edits to different fields on the same tour can be
+saved concurrently. The header shows when an edit is saving, saved, or retrying.
+`npm run dev` keeps the same data in `.data/state.json`.
 
 The repo is connected to the Worker (Workers & Pages → najaf-stays → Settings →
 Build): every push to `main` builds with `npm run build` and deploys with
@@ -43,7 +42,12 @@ Build): every push to `main` builds with `npm run build` and deploys with
 ## How a plan is made
 
 1. **Pull.** Pick the first night (and a last night, or leave it open for
-   everything approved so far). The server signs in to NKERP and reads:
+   everything approved within the planning horizon). A successful refresh
+   updates Najaf and Karbala together, keeping each city's last pulled range
+   unless you select a new one for that city. It preserves all staff edits.
+   The server compares each itinerary to the previous dates and route for the
+   same NKERP tour ID. Changed itineraries and newly pending re-approvals are
+   highlighted after the pull. The server signs in to NKERP and reads:
    - **General search → Groups** for the office: every tour with its status,
      ports, flights and sub-venue plans. Approved tours (Approved, Current,
      Completed) with a Najaf stay in the range go on.
@@ -66,9 +70,12 @@ Build): every push to `main` builds with `npm run build` and deploys with
    rooms floor by floor), the bookings to make, and the groups. Under each
    arrival and departure date: "(subvenue)" for a Karbala transfer, else the
    flight code and time.
-3. **Rooms.** Type a group's rooms in the Groups table, or "Choose rooms" to
-   pick exact Ruya rooms. Changes show in the Groups table at once; **Refresh
-   plan** rebuilds the plan with them (a bar says how many tours changed).
+3. **Hotel pax and rooms.** Edit the number of guests who need a hotel in
+   the Groups table. Enter zero to skip booking for that tour, or use
+   **Use NKERP** to remove the override. The row shows the original count
+   and the override. Type rooms or use **Choose rooms** for exact Ruya
+   rooms. These edits save per tour ID and city, and the plan recalculates
+   after each change.
 4. **Hotel messages.** One message per group in the team's format (`shared/messages.ts`),
    by check-in date, filtered by hotel, with a Copy button on each and "Copy
    all" per date. Two types: requirements only, or with the planned room
@@ -85,19 +92,14 @@ no hotels, no room plan.
    required" counted person by person (infants apart, tour totals while the
    guest list is empty), and pending tours (including those awaiting
    re-approval) listed under "See the pending tours" with their Karbala dates.
-2. **Groups.** One row per group: tour, group leader, guests, arrives and
-   leaves (flight and time, or "(subvenue)" for a Najaf transfer), nights, and
-   **Rooms asked for**, typed the same way as in Najaf.
-3. **Refresh messages** builds one message per group in the team's format
-   with `KARBALA (03 NIGHT)` in the heading, by check-in date, with Copy and
-   "Copy all" per date. A group with no rooms typed says "To be confirmed".
-   Nights follow Najaf's rule: the departure day counts when Karbala is the
-   second half of the trip and the group flies Iraqi Airways out of Najaf or
-   Baghdad (the same switch under "Hotels and rooms" turns it off for both).
-
-Karbala's pull, rooms and date range are saved for everyone, apart from
-Najaf's (`karbala*` keys in the same D1 table). Code: `shared/karbala.ts`,
-`src/lib/karbala.ts`, `src/screens/Karbala.tsx`.
+2. **Groups.** Edit hotel pax and room requirements as in Najaf. Karbala
+   has its own edits because the number of guests to book can differ by city.
+3. **Messages.** They update automatically with `KARBALA (03 NIGHT)` in the
+   heading, by check-in date, with Copy and **Copy all** per date. A group with
+   no rooms typed says “To be confirmed.” The departure day counts when
+   Karbala is the second half of the trip and the group flies Iraqi Airways
+   out of Najaf or Baghdad. The switch under **Hotels and rooms** controls
+   this rule for both cities.
 
 ### Typed rooms: how they are read (`shared/roomSpec.ts`)
 
@@ -143,7 +145,7 @@ Bed size first, then rooms, as the team writes them:
   free from 2 Dec.
 - **Araf:** 100 beds.
 - **Names:** the three hotels can be renamed under "Hotels and rooms"; the new
-  names show everywhere, including the Excel file (saved per device).
+  names show everywhere, including the Excel file.
 
 ## NKERP access
 
@@ -152,8 +154,3 @@ only call General search → Groups (POST), a tour's guest list
 (`GET api/tours/getApplicants/{id}`) and a tour's sub-venue plans
 (`GET api/tours/getTourSubVenue/{id}`); there is no save, release or email
 call in the code.
-
-## Saved on each device
-
-Typed rooms, hotel choices, hotel names and which Ruya rooms are left out are saved in the
-browser, per device, keyed by tour number so they survive a new pull.

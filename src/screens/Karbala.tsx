@@ -1,13 +1,14 @@
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { dayLabel, dayMonth, fullDate, rangeLabel } from '../../shared/dates';
 import { karbalaRows, type KarbalaRow } from '../../shared/karbala';
 import { describeRooms, parseRoomSpec } from '../../shared/roomSpec';
+import type { DateChange } from '../../shared/types';
+import { PaxInput, PullChanges, ReapprovalBadge } from '../components/TourChanges';
 import { PendingTours } from '../components/PendingTours';
 import { Brand, groupsText, guests, Num } from '../components/ui';
 import { howText } from '../lib/bookings';
 import { copy } from '../lib/copy';
-import { inputKey } from '../lib/inputs';
 import type { Karbala } from '../lib/karbala';
 import type { SaveStatus } from '../lib/shared';
 import { STEP_ORDER, stepTitle, type ServerState } from '../lib/sync';
@@ -64,7 +65,7 @@ function PullPanel({ k, server, onClose }: { k: Karbala; server: ServerState; on
           <h1>Karbala hotel messages</h1>
           <p className="k-lede">
             Pulls every approved FH Mumbai tour staying in Karbala from NKERP, the same way as Najaf: the guests who need a hotel, and the
-            tours still pending. Type each group’s rooms, press <b>Refresh messages</b>, and copy the messages.
+            tours still pending. Edit hotel pax and rooms, then copy the updated messages.
           </p>
           <form
             className="k-form"
@@ -122,15 +123,18 @@ function RoomsInput({ row, spec, onInput }: { row: KarbalaRow; spec: string; onI
         value={spec}
         placeholder="e.g. 2x6, 3x1"
         aria-label={`Rooms tour ${row.group.tourNo} needs in Karbala`}
+        maxLength={1000}
         spellCheck={false}
-        onChange={(e) => onInput(row.group.tourNo, e.target.value)}
+        onChange={(e) => onInput(row.group, { spec: e.target.value.trim() ? e.target.value : null })}
       />
       {read ? <small>{read.text}</small> : null}
     </div>
   );
 }
 
-function GroupsTable({ rows, typed, onInput }: { rows: KarbalaRow[]; typed: Karbala['typed']; onInput: Karbala['onInput'] }) {
+function GroupsTable({ rows, inputs, onInput, changes }: {
+  rows: KarbalaRow[]; inputs: Karbala['inputs']; onInput: Karbala['onInput']; changes?: Record<number, DateChange>;
+}) {
   return (
     <div className="sheet-wrap">
       <table className="sheet groups">
@@ -139,7 +143,7 @@ function GroupsTable({ rows, typed, onInput }: { rows: KarbalaRow[]; typed: Karb
             <th scope="col">Tour</th>
             <th scope="col">Group leader</th>
             <th scope="col" className="n">
-              Guests
+              Hotel pax
             </th>
             <th scope="col">Arrives</th>
             <th scope="col">Leaves</th>
@@ -156,11 +160,11 @@ function GroupsTable({ rows, typed, onInput }: { rows: KarbalaRow[]; typed: Karb
               <tr key={group.id}>
                 <th scope="row" className="tour">
                   {group.tourNo}
+                  <ReapprovalBadge change={changes?.[group.tourId]} />
                 </th>
                 <td className="leader">{group.leader || '–'}</td>
                 <td className="n strong">
-                  {group.pax}
-                  {group.infants ? <small> +{group.infants} inf</small> : null}
+                  <PaxInput group={group} onInput={onInput} />
                 </td>
                 <td className="when">
                   {dayMonth(group.checkIn)}
@@ -175,7 +179,7 @@ function GroupsTable({ rows, typed, onInput }: { rows: KarbalaRow[]; typed: Karb
                   {row.departureDay ? <small className="k-depday" title="Flies Iraqi Airways after Karbala: the departure day counts as a night, as in Najaf">incl. departure day</small> : null}
                 </td>
                 <td className="rooms">
-                  <RoomsInput row={row} spec={typed[inputKey(group)]?.spec ?? ''} onInput={onInput} />
+                  <RoomsInput row={row} spec={inputs[group.id]?.spec ?? ''} onInput={onInput} />
                 </td>
               </tr>
             );
@@ -188,14 +192,14 @@ function GroupsTable({ rows, typed, onInput }: { rows: KarbalaRow[]; typed: Karb
 
 // ---- messages ------------------------------------------------------------------------
 
-function Messages({ rows, pending, onRefresh }: { rows: KarbalaRow[]; pending: number; onRefresh: () => void }) {
+function Messages({ rows }: { rows: KarbalaRow[] }) {
   const [copied, setCopied] = useState<string | null>(null);
   const byDate = useMemo(() => {
     const map = new Map<string, KarbalaRow[]>();
     for (const row of rows) if (row.message) map.set(row.message.from, [...(map.get(row.message.from) ?? []), row]);
     return [...map].sort(([a], [b]) => a.localeCompare(b));
   }, [rows]);
-  const noNights = rows.filter((r) => !r.message);
+  const noNights = rows.filter((r) => r.group.pax > 0 && !r.message);
   const flash = async (key: string, text: string) => {
     if (await copy(text)) {
       setCopied(key);
@@ -205,15 +209,6 @@ function Messages({ rows, pending, onRefresh }: { rows: KarbalaRow[]; pending: n
 
   return (
     <div className="k-messages">
-      {pending ? (
-        <p className="msg-stale">
-          Rooms changed for {pending} {pending === 1 ? 'tour' : 'tours'} since the messages were made.{' '}
-          <button className="linkish" onClick={onRefresh}>
-            Refresh messages
-          </button>{' '}
-          to include them.
-        </p>
-      ) : null}
       {noNights.length ? (
         <p className="msg-note">No night in Karbala, so no message: tour {noNights.map((r) => r.group.tourNo).join(', ')}.</p>
       ) : null}
@@ -241,7 +236,7 @@ function Messages({ rows, pending, onRefresh }: { rows: KarbalaRow[]; pending: n
                     {copied === group.id ? 'Copied' : 'Copy'}
                   </button>
                 </div>
-                {issue ? <p className="msg-warn">{issue}</p> : message!.rooms ? null : <p className="msg-warn">No rooms yet: type them in the Groups table, then refresh the messages.</p>}
+                {issue ? <p className="msg-warn">{issue}</p> : message!.rooms ? null : <p className="msg-warn">No rooms yet: type them in the Groups table.</p>}
                 <pre className="msg-text">{message!.text}</pre>
               </article>
             ))}
@@ -254,25 +249,21 @@ function Messages({ rows, pending, onRefresh }: { rows: KarbalaRow[]; pending: n
 
 // ---- the page --------------------------------------------------------------------
 
-/** Rooms typed per tour number → per group id. */
-const byGroup = (groups: Karbala['groups'], inputs: Karbala['typed']) => Object.fromEntries(groups.map((g) => [g.id, inputs[inputKey(g)]]));
-
 export function KarbalaView({ k, tabs, server, departureDayRule, saveStatus, loaded, ago }: Props) {
   const [pullOpen, setPullOpen] = useState(false);
   const [showPending, setShowPending] = useState(false);
-  const { dataset, groups, typed, applied, pending } = k;
-  // The table shows what is typed; the messages are built from the rooms as of the last "Refresh messages".
-  const rows = useMemo(() => karbalaRows(groups, byGroup(groups, typed), { departureDayRule }), [groups, typed, departureDayRule]);
-  const messageRows = useMemo(() => karbalaRows(groups, byGroup(groups, applied), { departureDayRule }), [groups, applied, departureDayRule]);
+  const { dataset, groups, inputs } = k;
+  const rows = useMemo(() => karbalaRows(groups, inputs, { departureDayRule }, true), [groups, inputs, departureDayRule]);
   // A pull that finished closes the pull panel.
   useEffect(() => {
     if (!k.pulling && !k.error) setPullOpen(false);
   }, [k.pulling, k.error]);
   const meta = dataset?.meta;
   const showPull = !dataset || pullOpen || k.pulling || Boolean(k.error);
-  const asked = rows.filter((r) => typed[inputKey(r.group)]?.spec?.trim()).length;
+  const planned = rows.filter((r) => r.group.pax > 0);
+  const asked = planned.filter((r) => inputs[r.group.id]?.spec?.trim()).length;
   const guestCount = rows.reduce((n, r) => n + r.group.pax, 0);
-  const messageCount = messageRows.filter((r) => r.message).length;
+  const messageCount = planned.filter((r) => r.message).length;
 
   return (
     <div className="app karbala">
@@ -287,17 +278,13 @@ export function KarbalaView({ k, tabs, server, departureDayRule, saveStatus, loa
                 {meta.to ? ` to ${dayMonth(meta.to)}` : ''}
               </b>
               Pulled {ago(meta.fetchedAt)}
-              <span className="save-status" data-status={saveStatus} title="Rooms typed for Karbala are shared by every device and link">
+              <span className="save-status" data-status={saveStatus} title="Karbala hotel pax and rooms are shared by every device">
                 {saveStatus === 'saving' ? ' · Saving…' : saveStatus === 'offline' ? ' · Not saved yet, retrying' : loaded ? ' · Saved for everyone' : ''}
               </span>
             </div>
           ) : null}
           {meta ? (
             <div className="top-actions">
-              <button className="btn refresh" data-pending={pending > 0} onClick={k.refresh} title="Rebuild the hotel messages with the rooms typed since the last refresh">
-                {k.refreshed && !pending ? 'Messages refreshed' : 'Refresh messages'}
-                {pending ? <span className="badge">{pending}</span> : null}
-              </button>
               <a className="btn" href="#k-messages">
                 Hotel messages
               </a>
@@ -308,21 +295,6 @@ export function KarbalaView({ k, tabs, server, departureDayRule, saveStatus, loa
           ) : null}
         </div>
       </header>
-      <AnimatePresence initial={false}>
-        {pending && !showPull ? (
-          <motion.div key="pending" className="pending-bar" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }}>
-            <div className="pending-inner">
-              <span>
-                Rooms changed for {pending} {pending === 1 ? 'tour' : 'tours'}. The messages below do not include them yet.
-              </span>
-              <button className="btn solid" onClick={k.refresh}>
-                Refresh messages
-              </button>
-            </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-
       <main className="page">
         {showPull ? (
           <PullPanel
@@ -341,11 +313,12 @@ export function KarbalaView({ k, tabs, server, departureDayRule, saveStatus, loa
 
         {dataset && meta && !k.pulling ? (
           <>
+            <PullChanges meta={meta} />
             <section className="overview k-overview">
               <div className="overview-head">
                 <h1>Karbala · {rangeLabel(meta.from, meta.to ?? meta.through)}</h1>
                 <p>
-                  {groupsText(rows.length)}, {guests(guestCount)} who need a hotel. {messageCount} {messageCount === 1 ? 'message' : 'messages'} below.
+                  {groupsText(planned.length)}, {guests(guestCount)} who need a hotel. {messageCount} {messageCount === 1 ? 'message' : 'messages'} below.
                 </p>
                 {meta.notApproved ? (
                   <p className="overview-note">
@@ -367,11 +340,11 @@ export function KarbalaView({ k, tabs, server, departureDayRule, saveStatus, loa
                   <div className="block-head">
                     <h2>Groups</h2>
                     <p>
-                      One row per group staying in Karbala. {asked} of {rows.length} have rooms typed. Type rooms as bed size × rooms (2x6 is six 2-bed rooms), then
-                      press <b>Refresh messages</b>.
+                      Edit hotel pax or rooms and the messages update automatically. Enter 0 to skip a tour. {asked} of {planned.length} groups with hotel pax have rooms typed.
+                      Use 2x6 for six 2-bed rooms.
                     </p>
                   </div>
-                  <GroupsTable rows={rows} typed={typed} onInput={k.onInput} />
+                  <GroupsTable rows={rows} inputs={inputs} onInput={k.onInput} changes={meta.reapprovals} />
                 </section>
 
                 <section className="block" id="k-messages">
@@ -379,7 +352,7 @@ export function KarbalaView({ k, tabs, server, departureDayRule, saveStatus, loa
                     <h2>Hotel messages</h2>
                     <p>One message per group, by the day it checks in. Copy one, or every message for a day.</p>
                   </div>
-                  <Messages rows={messageRows} pending={pending} onRefresh={k.refresh} />
+                  <Messages rows={rows} />
                 </section>
               </>
             ) : (
@@ -394,7 +367,7 @@ export function KarbalaView({ k, tabs, server, departureDayRule, saveStatus, loa
 
       <AnimatePresence>
         {showPending && meta?.pending ? (
-          <PendingTours key="pending" tours={meta.pending} city="Karbala" outOf="the messages" onClose={() => setShowPending(false)} />
+          <PendingTours key="pending" tours={meta.pending} changes={meta.reapprovals} city="Karbala" outOf="the messages" onClose={() => setShowPending(false)} />
         ) : null}
       </AnimatePresence>
     </div>

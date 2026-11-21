@@ -31,9 +31,9 @@ export interface KarbalaRow {
  * One row per group with guests who need a hotel, by arrival date then tour.
  * `inputs` holds the rooms the messages are built from, by group id.
  */
-export function karbalaRows(groups: readonly Group[], inputs: Record<string, GroupInput | undefined>, settings: Pick<Settings, 'departureDayRule'>): KarbalaRow[] {
+export function karbalaRows(groups: readonly Group[], inputs: Record<string, GroupInput | undefined>, settings: Pick<Settings, 'departureDayRule'>, includeZeroPax = false): KarbalaRow[] {
   return groups
-    .filter((g) => g.pax > 0)
+    .filter((g) => includeZeroPax || g.pax > 0)
     .map((group) => {
       const nights = nightsOf(group, settings);
       const departureDay = nights.length > 0 && nights[nights.length - 1] === group.checkOut;
@@ -44,7 +44,7 @@ export function karbalaRows(groups: readonly Group[], inputs: Record<string, Gro
         : rooms && parsed.beds < group.pax
           ? `The rooms typed have ${parsed.beds} beds for ${group.pax} guests.`
           : null;
-      return { group, nights, departureDay, rooms, issue, message: karbalaMessage(group, nights, rooms) };
+      return { group, nights, departureDay, rooms, issue, message: group.pax > 0 ? karbalaMessage(group, nights, rooms) : null };
     })
     .sort(
       (a, b) =>

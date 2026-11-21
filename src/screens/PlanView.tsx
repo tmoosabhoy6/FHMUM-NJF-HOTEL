@@ -4,9 +4,11 @@ import { OPENING_BALANCE, RUYA_SHEET } from '../../shared/config';
 import { dayLabel, dayMonth, daysBetween, fullDate, rangeLabel } from '../../shared/dates';
 import { HOTEL_ORDER, reasonLabel } from '../../shared/engine';
 import { describeRooms, parseRoomSpec } from '../../shared/roomSpec';
-import type { DayRow, Group, GroupInput, HotelId, HotelNames, Placement, Plan, PullMeta } from '../../shared/types';
+import type { DateChange, DayRow, Group, GroupInput, HotelId, HotelNames, Placement, Plan, PullMeta } from '../../shared/types';
 import { bookingRows, howText, legDetail } from '../lib/bookings';
 import { useNames } from '../lib/names';
+import { PaxInput, PullChanges, ReapprovalBadge } from '../components/TourChanges';
+import type { InputChange } from '../lib/inputs';
 import { PendingTours } from '../components/PendingTours';
 import { RoomPicker } from '../components/RoomPicker';
 import { guests, groupsText, nightsText, Num, tint } from '../components/ui';
@@ -16,7 +18,7 @@ interface Props {
   plan: Plan;
   meta: PullMeta;
   inputs: Record<string, GroupInput | undefined>;
-  onInput: (tourNo: string, patch: GroupInput) => void;
+  onInput: (group: Group, patch: InputChange) => void;
   onOpenMessages: () => void;
 }
 
@@ -332,8 +334,9 @@ function RoomsCell({ group, input, placement, onInput }: { group: Group; input: 
         value={input.spec ?? ''}
         placeholder="e.g. 2x6, 3x1"
         aria-label={`Rooms tour ${group.tourNo} needs in ${names.ruya}`}
+        maxLength={1000}
         spellCheck={false}
-        onChange={(e) => onInput(group.tourNo, { spec: e.target.value })}
+        onChange={(e) => onInput(group, { spec: e.target.value.trim() ? e.target.value : null })}
       />
       {read ? <small>{read.text}</small> : null}
     </div>
@@ -356,7 +359,9 @@ function notesFor(group: Group, placement: Placement | undefined, names: HotelNa
   return notes;
 }
 
-function GroupsTable({ list, plan, inputs, onInput, onPick }: { list: Group[]; plan: Plan; inputs: Props['inputs']; onInput: Props['onInput']; onPick: (groupId: string) => void }) {
+function GroupsTable({ list, plan, inputs, onInput, onPick, changes }: {
+  list: Group[]; plan: Plan; inputs: Props['inputs']; onInput: Props['onInput']; onPick: (groupId: string) => void; changes?: Record<number, DateChange>;
+}) {
   const names = useNames();
   return (
     <div className="sheet-wrap">
@@ -366,7 +371,7 @@ function GroupsTable({ list, plan, inputs, onInput, onPick }: { list: Group[]; p
             <th scope="col">Tour</th>
             <th scope="col">Group leader</th>
             <th scope="col" className="n">
-              Guests
+              Hotel pax
             </th>
             <th scope="col">Arrives</th>
             <th scope="col">Leaves</th>
@@ -389,11 +394,11 @@ function GroupsTable({ list, plan, inputs, onInput, onPick }: { list: Group[]; p
               <tr key={group.id} data-flag={Boolean(placement && (placement.hotel !== 'ruya' || placement.overbooked))}>
                 <th scope="row" className="tour">
                   {group.tourNo}
+                  <ReapprovalBadge change={changes?.[group.tourId]} />
                 </th>
                 <td className="leader">{group.leader || '–'}</td>
                 <td className="n strong">
-                  {group.pax}
-                  {group.infants ? <small> +{group.infants} inf</small> : null}
+                  <PaxInput group={group} onInput={onInput} />
                 </td>
                 <td className="when">
                   {dayMonth(group.checkIn)}
@@ -414,7 +419,7 @@ function GroupsTable({ list, plan, inputs, onInput, onPick }: { list: Group[]; p
                     onChange={(e) => {
                       if (e.target.value === 'rooms') return onPick(group.id);
                       // Choosing a hotel replaces any rooms chosen by hand.
-                      onInput(group.tourNo, { pin: (e.target.value || null) as HotelId | null, roomNos: undefined });
+                      onInput(group, { pin: (e.target.value || null) as HotelId | null, roomNos: null });
                     }}
                   >
                     {input.roomNos?.length ? <option value="rooms">{names.ruya}, rooms by hand</option> : null}
@@ -432,7 +437,7 @@ function GroupsTable({ list, plan, inputs, onInput, onPick }: { list: Group[]; p
                 <td className="room-nos">
                   {placement?.rooms.length ? <span className="room-list">{placement.rooms.map((r) => r.label).join(', ')}</span> : null}
                   {placement?.specSource === 'manual' ? <span className="by-hand">by hand</span> : null}
-                  <button type="button" className="pick-btn" onClick={() => onPick(group.id)}>
+                  <button type="button" className="pick-btn" disabled={!placement?.nights.length} onClick={() => onPick(group.id)}>
                     {input.roomNos?.length ? 'Change rooms' : 'Choose rooms'}
                   </button>
                 </td>
@@ -459,7 +464,8 @@ export function PlanView({ groups, plan, meta, inputs, onInput, onOpenMessages }
   const byId = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
   // Groups that reached Najaf before the first night are covered by the opening balance (rooms 109, 110, 201, 202).
   const before = new Set(plan.before);
-  const planned = groups.filter((g) => !before.has(g.id) && g.pax > 0);
+  const editable = groups.filter((g) => !before.has(g.id) || g.nkerpPax !== undefined);
+  const planned = editable.filter((g) => plan.placements[g.id]);
   const { totals } = plan;
   const asked = planned.filter((g) => inputs[g.id]?.spec?.trim()).length;
   const [picking, setPicking] = useState<string | null>(null);
@@ -467,19 +473,9 @@ export function PlanView({ groups, plan, meta, inputs, onInput, onOpenMessages }
   const pickingGroup = picking ? byId.get(picking) : undefined;
   const otherNights = plan.days.filter((d) => d.hotels.araf.pax + d.hotels.c.pax > 0).length;
 
-  if (!planned.length) {
-    return (
-      <main className="page">
-        <div className="empty">
-          <h2>No groups in this range</h2>
-          <p>No approved tour in this range has guests who need a hotel. Pull again with other dates, or once more tours are approved in NKERP.</p>
-        </div>
-      </main>
-    );
-  }
-
   return (
     <main className="page">
+      <PullChanges meta={meta} />
       <section className="overview">
         <div className="overview-head">
           <h1>{rangeLabel(plan.range.from, plan.range.to)}</h1>
@@ -534,18 +530,20 @@ export function PlanView({ groups, plan, meta, inputs, onInput, onOpenMessages }
         <div className="block-head">
           <h2>Groups</h2>
           <p>
-            One row per group. {asked} of {planned.length} have rooms typed. Type rooms as bed size × rooms (2x6 is six 2-bed rooms), or
-            “Choose rooms” to pick exact {names.ruya} rooms, then press <b>Refresh plan</b>. The messages to send the hotels are under{' '}
+            Edit hotel pax or rooms and the plan updates automatically. Enter 0 to skip booking for a tour. {asked} of {planned.length} planned groups have rooms typed.
+            Use 2x6 for six 2-bed rooms, or choose exact {names.ruya} rooms. For messages, open{' '}
             <button className="linkish" onClick={onOpenMessages}>
               Hotel messages
             </button>
             .
           </p>
         </div>
-        <GroupsTable list={planned} plan={plan} inputs={inputs} onInput={onInput} onPick={setPicking} />
+        {editable.length ? (
+          <GroupsTable list={editable} plan={plan} inputs={inputs} onInput={onInput} onPick={setPicking} changes={meta.reapprovals} />
+        ) : <p className="read-empty">No approved stays in this range.</p>}
       </section>
 
-      <AnimatePresence>{showPending && meta.pending ? <PendingTours key="pending" tours={meta.pending} onClose={() => setShowPending(false)} /> : null}</AnimatePresence>
+      <AnimatePresence>{showPending && meta.pending ? <PendingTours key="pending" tours={meta.pending} changes={meta.reapprovals} onClose={() => setShowPending(false)} /> : null}</AnimatePresence>
       <AnimatePresence>
         {pickingGroup ? (
           <RoomPicker
@@ -554,7 +552,7 @@ export function PlanView({ groups, plan, meta, inputs, onInput, onOpenMessages }
             plan={plan}
             groups={groups}
             current={inputs[pickingGroup.id]?.roomNos}
-            onSave={(roomNos) => onInput(pickingGroup.tourNo, { roomNos, pin: null })}
+            onChange={(roomNos) => onInput(pickingGroup, { roomNos: roomNos?.length ? roomNos : null, pin: null })}
             onClose={() => setPicking(null)}
           />
         ) : null}

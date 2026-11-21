@@ -1,10 +1,12 @@
 import { motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import { dayMonth, rangeLabel } from '../../shared/dates';
-import type { PendingTour } from '../../shared/types';
+import { ReapprovalBadge } from './TourChanges';
+import type { DateChange, PendingTour } from '../../shared/types';
 
 interface Props {
   tours: PendingTour[];
+  changes?: Record<number, DateChange>;
   /** The city pulled, for the dates column. */
   city?: 'Najaf' | 'Karbala';
   /** What the tours are left out of. */
@@ -13,7 +15,7 @@ interface Props {
 }
 
 /** Tours NKERP has not approved yet: shown for information, not planned. */
-export function PendingTours({ tours, city = 'Najaf', outOf = 'the plan', onClose }: Props) {
+export function PendingTours({ tours, city = 'Najaf', outOf = 'the plan', changes, onClose }: Props) {
   const [onlyHotel, setOnlyHotel] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -83,6 +85,7 @@ export function PendingTours({ tours, city = 'Najaf', outOf = 'the plan', onClos
                   <tr key={t.tourId} data-quiet={!t.needHotel}>
                     <th scope="row" className="tour">
                       {t.tourNo}
+                      <ReapprovalBadge change={changes?.[t.tourId]} />
                     </th>
                     <td>{t.status}</td>
                     <td>{t.start ? dayMonth(t.start) : '–'}</td>
