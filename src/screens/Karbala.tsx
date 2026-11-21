@@ -270,7 +270,7 @@ export function KarbalaView({ k, tabs, server, departureDayRule, saveStatus, loa
     <div className="app karbala">
       <header className="app-top">
         <div className="app-top-inner">
-          <Brand name="Karbala stays" />
+          <Brand />
           {tabs}
           {meta ? (
             <div className="pulled">

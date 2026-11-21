@@ -1,4 +1,4 @@
-# Najaf stays
+# FH-MUM NJF Hotel Accommodation Planner
 
 Hotel planning for FH Mumbai groups in Najaf. The app pulls every approved
 group that arranges its own hotel from NKERP, then places each one in **Ruya**,
