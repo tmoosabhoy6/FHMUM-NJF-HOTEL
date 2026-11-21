@@ -130,5 +130,5 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   const mode = DEV ? 'dev' : 'production';
-  console.log(`Najaf stays (${mode}) on http://localhost:${PORT}  ·  NKERP sign-in ${sharedClient().configured ? 'set up' : 'missing'}`);
+  console.log(`FH-MUM NJF Hotel Accommodation Planner (${mode}) on http://localhost:${PORT}  ·  NKERP sign-in ${sharedClient().configured ? 'set up' : 'missing'}`);
 });

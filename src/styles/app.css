@@ -1,4 +1,4 @@
-/* Najaf stays — design tokens
+/* FH-MUM NJF Hotel Accommodation Planner — design tokens
    Night (the pull) is lapis and lamplight; day (the plan) is limewash with
    the three hotel colours taken from Najaf itself: kashi turquoise for Ruya,
    dome gold for Araf, pomegranate for Hotel C. */
@@ -130,6 +130,7 @@ button {
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  white-space: nowrap;
   font-family: var(--display);
   font-weight: 600;
   font-size: 17px;
@@ -581,11 +582,12 @@ button {
 .app-top-inner {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 0 28px;
-  height: 62px;
+  padding: 10px 28px;
+  min-height: 62px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 28px;
+  gap: 10px 28px;
 }
 
 .top-actions {
@@ -2442,5 +2444,15 @@ a.btn {
   }
   .k-form {
     grid-template-columns: 1fr;
+  }
+}
+
+/* The app name may wrap on a phone, and the taller header scrolls away instead of staying pinned. */
+@media (max-width: 520px) {
+  .brand {
+    white-space: normal;
+  }
+  .app-top {
+    position: static;
   }
 }

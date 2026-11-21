@@ -31,7 +31,7 @@ export function Num({ value }: { value: number }) {
   );
 }
 
-export function Brand({ name = 'Najaf stays' }: { name?: string }) {
+export function Brand({ name = 'FH-MUM NJF Hotel Accommodation Planner' }: { name?: string }) {
   return (
     <span className="brand">
       <span className="brand-mark" aria-hidden="true">
