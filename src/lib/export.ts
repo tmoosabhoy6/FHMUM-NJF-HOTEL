@@ -2,13 +2,14 @@ import { DEFAULT_HOTEL_NAMES, HOTEL_ORDER, reasonLabel } from '../../shared/engi
 import { dayLabel, fullDate } from '../../shared/dates';
 import { describeRooms } from '../../shared/roomSpec';
 import type { Group, HotelNames, Plan, PullMeta } from '../../shared/types';
+import { tourInput, type TourInputs } from './inputs';
 import { bookingRows, legText } from './bookings';
 
 const INK = 'FF13233B';
 const FILL: Record<string, string> = { ruya: 'FFDCEFEC', araf: 'FFF6EBCF', c: 'FFF5DDE5' };
 
 /** Builds the Excel report and hands it to the browser as a download. */
-export async function exportPlan(plan: Plan, groups: Group[], meta: PullMeta, names: HotelNames = DEFAULT_HOTEL_NAMES) {
+export async function exportPlan(plan: Plan, groups: Group[], meta: PullMeta, names: HotelNames = DEFAULT_HOTEL_NAMES, inputs: TourInputs = {}) {
   const { Workbook } = (await import('exceljs')).default as unknown as typeof import('exceljs');
   const book = new Workbook();
   book.created = new Date();
@@ -148,7 +149,6 @@ export async function exportPlan(plan: Plan, groups: Group[], meta: PullMeta, na
       { header: 'Najaf', key: 'najaf', width: 26 },
       { header: 'Guests', key: 'pax', width: 9 },
       { header: 'Need a hotel', key: 'need', width: 13 },
-      { header: 'Housed by NKERP', key: 'housed', width: 16 },
       { header: 'Note', key: 'note', width: 30 },
     ];
     for (const t of meta.pending) {
@@ -160,8 +160,7 @@ export async function exportPlan(plan: Plan, groups: Group[], meta: PullMeta, na
         ports: t.exitPort && t.exitPort !== t.entryPort ? `${t.entryPort} → ${t.exitPort}` : t.entryPort,
         najaf: t.najaf.length ? t.najaf.map((n) => `${fullDate(n.checkIn)} – ${fullDate(n.checkOut)}`).join('; ') : 'No dates in NKERP yet',
         pax: t.pax,
-        need: t.needHotel ?? '',
-        housed: t.housed ?? '',
+        need: tourInput(inputs, t, meta)?.pax ?? t.needHotel ?? '',
         note: t.remarks,
       });
     }

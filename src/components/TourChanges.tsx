@@ -1,11 +1,19 @@
 import { useState } from 'react';
-import type { DateChange, Group, PullMeta } from '../../shared/types';
+import type { DateChange, PullMeta } from '../../shared/types';
 import type { InputChange } from '../lib/inputs';
 
-export function PaxInput({ group, onInput }: { group: Group; onInput: (group: Group, change: InputChange) => void }) {
+interface PaxProps {
+  tourNo: string;
+  pax: number | null;
+  nkerpPax?: number | null;
+  paxBefore?: number;
+  infants?: number;
+  onChange: (change: InputChange) => void;
+}
+
+export function PaxInput({ tourNo, pax, nkerpPax, paxBefore, infants = 0, onChange }: PaxProps) {
   const [draft, setDraft] = useState<string | null>(null);
-  const nkerp = group.nkerpPax;
-  const original = group.paxBefore ?? nkerp;
+  const original = paxBefore ?? nkerpPax;
   return (
     <div className="pax-edit">
       <input
@@ -14,28 +22,28 @@ export function PaxInput({ group, onInput }: { group: Group; onInput: (group: Gr
         max={9999}
         step={1}
         inputMode="numeric"
-        aria-label={`Hotel pax for tour ${group.tourNo}`}
-        value={draft ?? group.pax}
+        aria-label={`Hotel pax for tour ${tourNo}`}
+        value={draft ?? pax ?? ''}
         onChange={(event) => {
           const raw = event.target.value;
-          const pax = event.target.valueAsNumber;
+          const next = event.target.valueAsNumber;
           const valid = /^\d{1,4}$/.test(raw) && event.target.validity.valid;
           setDraft(valid ? null : raw);
-          if (valid && pax !== group.pax) onInput(group, { pax, paxBefore: original ?? group.pax });
+          if (valid && next !== pax) onChange({ pax: next, paxBefore: original ?? pax });
         }}
         onBlur={() => setDraft(null)}
       />
       {draft !== null && <small className="pax-error">Enter 0–9999</small>}
-      {group.infants > 0 && <small>+{group.infants} inf</small>}
-      {nkerp !== undefined && (
+      {infants > 0 && <small>+{infants} inf</small>}
+      {nkerpPax !== undefined && (
         <>
-          <span className="tour-change pax" title={`NKERP currently shows ${nkerp} hotel pax`}>Pax adjusted: {original} → {group.pax}</span>
-          {original !== nkerp && <small>NKERP now {nkerp}</small>}
+          <span className="tour-change pax" title={`NKERP currently shows ${nkerpPax ?? 'unconfirmed'} hotel pax`}>Pax adjusted: {original ?? 'unconfirmed'} → {pax}</span>
+          {original !== nkerpPax && <small>NKERP now {nkerpPax ?? 'unconfirmed'}</small>}
           <button className="linkish" type="button" onClick={() => {
             setDraft(null);
-            onInput(group, { pax: null, paxBefore: null });
+            onChange({ pax: null, paxBefore: null });
           }}>
-            Use NKERP ({nkerp})
+            Use NKERP ({nkerpPax ?? 'unconfirmed'})
           </button>
         </>
       )}

@@ -238,12 +238,26 @@ describe('the pull', () => {
     expect(result.groups).toContainEqual(expect.objectContaining({ tourId: 5002, pax: 0 }));
     expect(result.groups[0]).toMatchObject({ tourNo: '9001', pax: 2, paxNkerpHoused: 2, leader: 'A B' });
     expect(result.meta).toMatchObject({ approvedStays: 2, nkerpHousedOnly: 1, notApproved: 1, toursRead: 2 });
-    expect(client.calls.filter((c) => c.startsWith('GET api/tours/getApplicants'))).toEqual(['GET api/tours/getApplicants/5001', 'GET api/tours/getApplicants/5002']);
+    expect(client.calls.filter((c) => c.startsWith('GET api/tours/getApplicants')).sort()).toEqual([
+      'GET api/tours/getApplicants/5001', 'GET api/tours/getApplicants/5002', 'GET api/tours/getApplicants/5003',
+    ]);
     // Every day of the range lights, in order.
     expect(lit[0]).toBe('2026-12-01');
     expect(lit[lit.length - 1]).toBe('2026-12-11');
     expect(lit).toEqual([...lit].sort());
     expect(events).toContain('tours');
+  });
+
+  it('uses Baghdad dates for pending tours crossing midnight UTC and counts only hotel guests', async () => {
+    const row = tourRow({ Status: 'Pending', StartDate: '2026-12-01T22:05:00', EndDate: '2026-12-05T22:10:00', lstSubVenuePlan: [] });
+    const applicants = [
+      person({ AccomodationOptionId: 3 }), person({ AccomodationOptionId: 3, IsInfant: true }),
+      person({ AccomodationOptionId: 3, IsCancellation: true }), person({ AccomodationOptionId: 2 }),
+    ];
+    const detail = { PaxNotRequiredAcc: 8, TourSubvenuePlan: [] };
+    const result = await runSync({ client: fakeClient([row], { 5001: applicants }, { 5001: detail }), from: '2026-12-06', to: '2026-12-07', office: OFFICE });
+    expect(result.meta.pending).toMatchObject([{ start: '2026-12-02', end: '2026-12-06', needHotel: 1, hotelPaxSource: 'applicants' }]);
+    expect(pendingTour({ ...row, StartDateTimeZone: '2026-12-01T22:05:00' }, detail).start).toBe('2026-12-01');
   });
 
   it('lists a tour awaiting re-approval as pending, not planned', async () => {

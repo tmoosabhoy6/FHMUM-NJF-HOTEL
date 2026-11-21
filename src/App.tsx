@@ -6,15 +6,14 @@ import { buildPlan, hotelNames } from '../shared/engine';
 import type { Group, Settings } from '../shared/types';
 import { HotelMessages } from './components/HotelMessages';
 import { SettingsDrawer, type Prefs } from './components/SettingsDrawer';
-import { Brand, CityTabs } from './components/ui';
+import { Brand, CityTabs, type PlannerTab } from './components/ui';
 import { exportPlan } from './lib/export';
 import { editInput, inputKey, legacyKey, tourInput, withHotelPax, type InputChange, type TourInputs } from './lib/inputs';
-import { useKarbala } from './lib/karbala';
 import { NamesContext } from './lib/names';
 import { SharedState, type SaveStatus, type Values } from './lib/shared';
 import { load, save } from './lib/storage';
 import { checkServer, emptyProgress, startPull, type PullProgress, type PullResult, type ServerState } from './lib/sync';
-import { KarbalaView } from './screens/Karbala';
+import { ApprovalsView } from './screens/Approvals';
 import { Night } from './screens/Night';
 import { PlanView } from './screens/PlanView';
 
@@ -56,13 +55,13 @@ export function App() {
   const [shared] = useState(() => new SharedState());
   const [loaded, setLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
-  // Which city is open (per device). Karbala is the message generator only (screens/Karbala.tsx).
-  const [tab, setTab] = useState<'najaf' | 'karbala'>(() => (load<string>(KEY.tab, 'najaf') === 'karbala' ? 'karbala' : 'najaf'));
+  const [tab, setTab] = useState<PlannerTab>(() => {
+    const saved = load<string>(KEY.tab, 'najaf');
+    return saved === 'approvals' ? saved : 'najaf';
+  });
+  const returnToApprovals = useRef(false);
   useEffect(() => save(KEY.tab, tab), [tab]);
   const pollNow = useRef<() => void>(() => {});
-  const karbala = useKarbala(shared, range, () => pollNow.current());
-  const karbalaApply = useRef(karbala.apply);
-  karbalaApply.current = karbala.apply;
   const latest = useRef({ savedDataset, screen });
   latest.current = { savedDataset, screen };
 
@@ -88,7 +87,6 @@ export function App() {
       if ('inputs' in values || first) setTyped(shared.withPending('inputs', (values.inputs ?? {}) as TourInputs));
       if ('prefs' in values && !shared.pending('prefs')) setPrefs({ ...DEFAULT_PREFS, ...values.prefs as Partial<Prefs> });
       if (values.range && !shared.pending('range')) setRange(values.range as typeof range);
-      karbalaApply.current(values, first);
       first = false;
       setLoaded(true);
     };
@@ -158,6 +156,10 @@ export function App() {
               save(KEY.data, result);
               setSavedDataset(result);
               pollNow.current();
+              if (returnToApprovals.current) {
+                returnToApprovals.current = false;
+                setTab('approvals');
+              }
             }
             setScreen('app');
           },
@@ -183,10 +185,10 @@ export function App() {
     [dataset, groups, inputs, settings],
   );
 
-  const onInput = (group: Group, changes: InputChange) => {
-    const legacy = legacyKey(group, dataset?.meta);
+  const onInput = (group: Pick<Group, 'tourId' | 'tourNo'>, changes: InputChange, data = dataset) => {
+    const legacy = legacyKey(group, data?.meta);
     const update = (all: TourInputs) => editInput(all, inputKey(group), legacy, changes);
-    if (sample) setSampleInputs(update);
+    if (data?.meta.source === 'sample') setSampleInputs(update);
     else {
       setTyped(update);
       shared.edit('inputs', group, legacy, changes);
@@ -196,12 +198,38 @@ export function App() {
   const names = settings.names ?? hotelNames();
   const night = screen !== 'app';
   const flagged = plan?.totals.flagged ?? 0;
-  const tabs = (dark = false) => <CityTabs tab={tab} onTab={setTab} dark={dark} />;
+  const openPull = () => {
+    setProgress(emptyProgress());
+    setError(null);
+    setScreen('start');
+  };
+  const changeTab = (next: PlannerTab) => {
+    returnToApprovals.current = false;
+    setTab(next);
+  };
+  const closePull = () => {
+    setScreen(dataset ? 'app' : 'start');
+    if (returnToApprovals.current) changeTab('approvals');
+  };
+  const tabs = (dark = false) => <CityTabs tab={tab} onTab={changeTab} dark={dark} />;
 
-  if (tab === 'karbala') {
+  if (tab === 'approvals') {
     return (
       <NamesContext.Provider value={names}>
-        <KarbalaView k={karbala} tabs={tabs()} server={server} departureDayRule={prefs.departureDayRule} saveStatus={saveStatus} loaded={loaded} ago={ago} />
+        <ApprovalsView
+          tabs={tabs()}
+          dataset={savedDataset}
+          inputs={typed}
+          settings={settings}
+          loaded={loaded}
+          saveStatus={saveStatus}
+          onEdit={(tour, change) => onInput(tour, change, savedDataset)}
+          onPull={() => {
+            returnToApprovals.current = true;
+            setTab('najaf');
+            openPull();
+          }}
+        />
       </NamesContext.Provider>
     );
   }
@@ -233,11 +261,7 @@ export function App() {
                 </button>
                 <button
                   className="btn"
-                  onClick={() => {
-                    setProgress(emptyProgress());
-                    setError(null);
-                    setScreen('start');
-                  }}
+                  onClick={openPull}
                 >
                   Pull again
                 </button>
@@ -247,7 +271,7 @@ export function App() {
                   onClick={async () => {
                     setExporting(true);
                     try {
-                      await exportPlan(plan, groups, dataset.meta, names);
+                      await exportPlan(plan, groups, dataset.meta, names, activeInputs);
                     } finally {
                       setExporting(false);
                     }
@@ -263,7 +287,7 @@ export function App() {
           ) : null}
 
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}>
-            <PlanView groups={groups} plan={plan} meta={dataset.meta} inputs={inputs} onInput={onInput} onOpenMessages={() => setPanel('messages')} />
+            <PlanView groups={groups} plan={plan} meta={dataset.meta} inputs={inputs} tourInputs={activeInputs} onInput={onInput} onOpenMessages={() => setPanel('messages')} />
           </motion.div>
           <span className="sr" aria-live="polite">
             {flagged ? `${flagged} groups are not in ${names.ruya}.` : `Every group is in ${names.ruya}.`}
@@ -309,10 +333,10 @@ export function App() {
             onPull={pull}
             onCancel={() => {
               cancel.current?.();
-              setScreen(dataset ? 'app' : 'start');
+              closePull();
             }}
-            onResume={dataset ? () => setScreen('app') : null}
-            resumeLabel={dataset ? `Back to the plan from ${dayMonth(dataset.meta.from)}` : null}
+            onResume={dataset ? closePull : null}
+            resumeLabel={dataset ? (returnToApprovals.current ? 'Back to approvals' : `Back to the plan from ${dayMonth(dataset.meta.from)}`) : null}
             server={server}
             source={source}
             progress={progress}

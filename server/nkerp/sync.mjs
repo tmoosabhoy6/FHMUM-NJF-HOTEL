@@ -16,7 +16,7 @@
  * every tour arriving by that day has been counted.
  */
 import { NkerpError } from './client.mjs';
-import { addDays, countGuests, countsFromTour, datedRoute, daysBetween, isApprovedTour, isLiveTour, pendingTour, sameOffice, staysFromGroupRow, venueOf, withGuests } from './normalize.mjs';
+import { addDays, countGuests, countsFromTour, datedRoute, daysBetween, isApprovedTour, isLiveTour, pendingTour, sameOffice, staysFromGroupRow, tripDate, venueOf, withGuests } from './normalize.mjs';
 
 export const DEFAULT_OFFICE = 'Fayz E Husayni Trust Mumbai';
 const LOOKBACK_DAYS = 45; // a tour that started this long before the range can still be in Najaf
@@ -151,9 +151,9 @@ export async function runSync({
       if (Array.isArray(row.lstSubVenuePlan)) observe(id, row.ReferenceNo, datedRoute(row));
       for (const w of windows) w.stays.push(...staysFromGroupRow(row, w.venue).filter(w.overlaps));
     } else if (isLiveTour(row)) {
-      const start = String(row.StartDate ?? '').slice(0, 10);
-      const end = String(row.EndDate ?? '').slice(0, 10);
-      const within = windows.filter((w) => start && start <= w.horizon && (!end || end >= w.from));
+      const start = tripDate(row.StartDateTimeZone, row.StartDate);
+      const end = tripDate(row.EndDateTimeZone, row.EndDate);
+      const within = windows.filter((w) => (!start || start <= w.horizon) && (!end || end >= w.from));
       if (within.length || trackedIds.has(id)) pending.push({ id, row, within });
     }
   }
@@ -214,7 +214,21 @@ export async function runSync({
   });
   light(end);
   step('guests', 'done', `${counted.filter((s) => s.pax > 0).length} stays with guests who need a hotel`);
-  step('match', 'active', 'Building the stays');
+
+  // The approved counts take precedence if the upstream service or request
+  // budget is exhausted. Pending tours still have the counts from their plans.
+  const pendingCounts = new Map();
+  const pendingTours = pending.filter(({ within }) => within.length);
+  step('match', 'active', pendingTours.length ? 'Checking hotel pax on pending tours' : 'Building the stays');
+  await pool(pendingTours, POOL, async ({ id }) => {
+    try {
+      const applicants = await readGuests(client, id, signal);
+      if (applicants.length) pendingCounts.set(id, countGuests(applicants));
+    } catch (error) {
+      if (signal?.aborted || !(error instanceof NkerpError)) throw error;
+      // Drafts may only expose the tour totals.
+    }
+  });
 
   const fetchedAt = new Date().toISOString();
   const datasets = windows.map((w) => {
@@ -229,12 +243,16 @@ export async function runSync({
         from: w.from,
         to: w.to,
         through: endOf(w),
+        coveredThrough: w.horizon,
         fetchedAt,
         approvedStays: groups.length,
         nkerpHousedOnly: groups.filter((g) => g.pax === 0).length,
         notApproved: w.pending.length,
         reapproval: w.pending.filter((t) => t.reapproval).length,
-        pending: w.pending.sort((a, b) => String(a.start).localeCompare(String(b.start)) || a.tourNo.localeCompare(b.tourNo, undefined, { numeric: true })),
+        pending: w.pending.map((tour) => {
+          const guests = pendingCounts.get(Number(tour.tourId));
+          return guests ? { ...tour, needHotel: guests.notRequired, housed: guests.required, unclassified: guests.unknown, hotelPaxSource: 'applicants' } : tour;
+        }).sort((a, b) => String(a.start).localeCompare(String(b.start)) || a.tourNo.localeCompare(b.tourNo, undefined, { numeric: true })),
         toursRead: new Set(groups.map((g) => g.tourId)).size,
         requests: client.requests - initialRequests,
         seconds: Math.round((Date.now() - started) / 100) / 10,

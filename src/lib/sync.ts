@@ -41,9 +41,6 @@ export const STEP_TITLE: Record<StepId, string> = {
   match: 'Build the stays',
 };
 
-/** Step titles for a pull of `venue`. */
-export const stepTitle = (id: StepId, venue: Venue = 'najaf') => (id === 'tours' && venue === 'karbala' ? 'Approved Karbala tours' : STEP_TITLE[id]);
-
 export const emptyProgress = (): PullProgress => ({
   steps: {
     signin: { status: 'waiting', detail: '' },

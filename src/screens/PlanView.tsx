@@ -8,7 +8,7 @@ import type { DateChange, DayRow, Group, GroupInput, HotelId, HotelNames, Placem
 import { bookingRows, howText, legDetail } from '../lib/bookings';
 import { useNames } from '../lib/names';
 import { PaxInput, PullChanges, ReapprovalBadge } from '../components/TourChanges';
-import type { InputChange } from '../lib/inputs';
+import type { InputChange, TourInputs } from '../lib/inputs';
 import { PendingTours } from '../components/PendingTours';
 import { RoomPicker } from '../components/RoomPicker';
 import { guests, groupsText, nightsText, Num, tint } from '../components/ui';
@@ -18,7 +18,8 @@ interface Props {
   plan: Plan;
   meta: PullMeta;
   inputs: Record<string, GroupInput | undefined>;
-  onInput: (group: Group, patch: InputChange) => void;
+  tourInputs: TourInputs;
+  onInput: (group: Pick<Group, 'tourId' | 'tourNo'>, patch: InputChange) => void;
   onOpenMessages: () => void;
 }
 
@@ -354,7 +355,6 @@ function notesFor(group: Group, placement: Placement | undefined, names: HotelNa
       notes.push({ text: `Flies ${group.departure.flight ?? 'Iraqi Airways'} from ${airport}: departure day counted as a night.`, warn: false });
     }
   }
-  if (group.paxNkerpHoused > 0) notes.push({ text: `${group.paxNkerpHoused} more on this tour are housed by NKERP.`, warn: false });
   for (const note of group.notes) notes.push({ text: note, warn: false });
   return notes;
 }
@@ -398,7 +398,8 @@ function GroupsTable({ list, plan, inputs, onInput, onPick, changes }: {
                 </th>
                 <td className="leader">{group.leader || '–'}</td>
                 <td className="n strong">
-                  <PaxInput group={group} onInput={onInput} />
+                  <PaxInput tourNo={group.tourNo} pax={group.pax} nkerpPax={group.nkerpPax} paxBefore={group.paxBefore}
+                    infants={group.infants} onChange={(change) => onInput(group, change)} />
                 </td>
                 <td className="when">
                   {dayMonth(group.checkIn)}
@@ -459,7 +460,7 @@ function GroupsTable({ list, plan, inputs, onInput, onPick, changes }: {
 
 // ---- the page --------------------------------------------------------------------
 
-export function PlanView({ groups, plan, meta, inputs, onInput, onOpenMessages }: Props) {
+export function PlanView({ groups, plan, meta, inputs, tourInputs, onInput, onOpenMessages }: Props) {
   const names = useNames();
   const byId = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
   // Groups that reached Najaf before the first night are covered by the opening balance (rooms 109, 110, 201, 202).
@@ -543,7 +544,7 @@ export function PlanView({ groups, plan, meta, inputs, onInput, onOpenMessages }
         ) : <p className="read-empty">No approved stays in this range.</p>}
       </section>
 
-      <AnimatePresence>{showPending && meta.pending ? <PendingTours key="pending" tours={meta.pending} changes={meta.reapprovals} onClose={() => setShowPending(false)} /> : null}</AnimatePresence>
+      <AnimatePresence>{showPending && meta.pending ? <PendingTours key="pending" tours={meta.pending} meta={meta} inputs={tourInputs} onEdit={onInput} onClose={() => setShowPending(false)} /> : null}</AnimatePresence>
       <AnimatePresence>
         {pickingGroup ? (
           <RoomPicker

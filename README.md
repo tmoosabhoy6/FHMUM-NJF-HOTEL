@@ -24,10 +24,10 @@ login of its own: anyone with the link can use it.
 `npm run build` builds the app and bundles it into the Worker
 (`scripts/embed-assets.mjs`); `npm run deploy` builds and deploys.
 
-**Saved for everyone.** Both city views, hotel pax overrides, room requests,
+**Saved for everyone.** The Najaf pull, hotel pax overrides, room requests,
 hotel choices, settings and date ranges are stored in the shared Cloudflare
 D1 database (`najaf-stays`, binding `DB`, `server/state.mjs`). Edits save as
-you make them, and Najaf's allocation and Karbala's messages update immediately.
+you make them, and the Najaf bookings and approval proposals update immediately.
 Devices read the shared copy when opened or brought back into view, and every
 15 seconds while active. Edits to different fields on the same tour can be
 saved concurrently. The header shows when an edit is saving, saved, or retrying.
@@ -43,8 +43,7 @@ Build): every push to `main` builds with `npm run build` and deploys with
 
 1. **Pull.** Pick the first night (and a last night, or leave it open for
    everything approved within the planning horizon). A successful refresh
-   updates Najaf and Karbala together, keeping each city's last pulled range
-   unless you select a new one for that city. It preserves all staff edits.
+   updates the saved hotel plan and preserves staff edits.
    The server compares each itinerary to the previous dates and route for the
    same NKERP tour ID. Changed itineraries and newly pending re-approvals are
    highlighted after the pull. The server signs in to NKERP and reads:
@@ -53,8 +52,8 @@ Build): every push to `main` builds with `npm run build` and deploys with
      Completed) with a Najaf stay in the range go on.
    - **Pending tours**, including approved tours that were updated and wait
      for re-approval (NKERP lists them as Pending with no plans until it
-     re-approves them). They are not planned: the pull reads their sub-venue
-     plans, and "See the pending tours" on the plan lists them (status, trip
+     re-approves them). The Approvals tab proposes Najaf hotel stays for them.
+     The pull reads their sub-venue plans, and "See the pending tours" on the plan lists them (status, trip
      dates, ports, latest Najaf dates if any, guests who will need a hotel);
      the Excel file has a "Pending tours" sheet. They join the plan by
      themselves once NKERP approves them and the data is pulled again.
@@ -74,32 +73,29 @@ Build): every push to `main` builds with `npm run build` and deploys with
    the Groups table. Enter zero to skip booking for that tour, or use
    **Use NKERP** to remove the override. The row shows the original count
    and the override. Type rooms or use **Choose rooms** for exact Ruya
-   rooms. These edits save per tour ID and city, and the plan recalculates
+   rooms. These edits save by exact tour ID, and the Najaf plan recalculates
    after each change.
 4. **Hotel messages.** One message per group in the team's format (`shared/messages.ts`),
    by check-in date, filtered by hotel, with a Copy button on each and "Copy
    all" per date. Two types: requirements only, or with the planned room
    numbers on each room line (`- Room no. 106, 107`). "Download Excel" exports the plan; its "Bookings to make" sheet has one row per tour per hotel (first and last night, nights, guests, arrival and departure flight or subvenue).
 
-## Karbala tab
+## Approvals tab
 
-The **Karbala** tab at the top (next to **Najaf**) is a message generator only:
-no hotels, no room plan.
+Open **Approvals** after a Najaf pull and select the tour arrival dates.
+The proposal keeps the approved Najaf plan and its exact room assignments
+fixed. It compares both city orders for pending hotel groups, using their
+saved pax and room requirements where available. Each trip has two contiguous
+stays. Even trips split equally, and odd trips give Karbala one extra night.
 
-1. **Pull.** Pick the first night (and a last night, or leave it open). The
-   pull is the same one as Najaf's (`/api/sync?venue=karbala`): approved tours
-   with a Karbala stay in the range, guests marked "accommodation not
-   required" counted person by person (infants apart, tour totals while the
-   guest list is empty), and pending tours (including those awaiting
-   re-approval) listed under "See the pending tours" with their Karbala dates.
-2. **Groups.** Edit hotel pax and room requirements as in Najaf. Karbala
-   has its own edits because the number of guests to book can differ by city.
-3. **Messages.** They update automatically with `KARBALA (03 NIGHT)` in the
-   heading, by check-in date, with Copy and **Copy all** per date. A group with
-   no rooms typed says “To be confirmed.” The departure day counts when
-   Karbala is the second half of the trip and the group flies Iraqi Airways
-   out of Najaf or Baghdad. The switch under **Hotels and rooms** controls
-   this rule for both cities.
+The planner looks for the most Ruya guest-nights while keeping each group
+together. It also shows Araf and Hotel C placements, tours needing review, and
+projected Najaf occupancy by night. Pull a wider range if a tour departs
+beyond the saved capacity coverage. Use **Copy proposal** to review the
+dates before approving in NKERP. Use **Edit pending hotel pax** to change the
+number of hotel guests on a tour or restore its NKERP count. A flight that
+could affect the final hotel night is flagged for staff to confirm. If the
+joint search reaches its limit, the app labels its best feasible proposal.
 
 ### Typed rooms: how they are read (`shared/roomSpec.ts`)
 

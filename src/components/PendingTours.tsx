@@ -1,21 +1,20 @@
 import { motion } from 'motion/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { dayMonth, rangeLabel } from '../../shared/dates';
-import { ReapprovalBadge } from './TourChanges';
-import type { DateChange, PendingTour } from '../../shared/types';
+import { PaxInput, ReapprovalBadge } from './TourChanges';
+import type { PendingTour, PullMeta } from '../../shared/types';
+import { tourInput, type InputChange, type TourInputs } from '../lib/inputs';
 
 interface Props {
   tours: PendingTour[];
-  changes?: Record<number, DateChange>;
-  /** The city pulled, for the dates column. */
-  city?: 'Najaf' | 'Karbala';
-  /** What the tours are left out of. */
-  outOf?: string;
+  meta: PullMeta;
+  inputs: TourInputs;
+  onEdit: (tour: PendingTour, change: InputChange) => void;
   onClose: () => void;
 }
 
 /** Tours NKERP has not approved yet: shown for information, not planned. */
-export function PendingTours({ tours, city = 'Najaf', outOf = 'the plan', changes, onClose }: Props) {
+export function PendingTours({ tours, meta, inputs, onEdit, onClose }: Props) {
   const [onlyHotel, setOnlyHotel] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -23,9 +22,10 @@ export function PendingTours({ tours, city = 'Najaf', outOf = 'the plan', change
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const withGuests = tours.filter((t) => (t.needHotel ?? 0) > 0);
-  const guests = withGuests.reduce((n, t) => n + (t.needHotel ?? 0), 0);
-  const shown = useMemo(() => (onlyHotel ? withGuests : tours), [onlyHotel, tours, withGuests]);
+  const count = (tour: PendingTour) => tourInput(inputs, tour, meta)?.pax ?? tour.needHotel;
+  const withGuests = tours.filter((t) => (count(t) ?? 0) > 0);
+  const guests = withGuests.reduce((n, t) => n + (count(t) ?? 0), 0);
+  const shown = onlyHotel ? withGuests : tours;
 
   return (
     <>
@@ -49,8 +49,8 @@ export function PendingTours({ tours, city = 'Najaf', outOf = 'the plan', change
         <div className="drawer-body">
           <section className="set">
             <p>
-              {tours.length} {tours.length === 1 ? 'tour is' : 'tours are'} not approved in NKERP yet, or waiting for re-approval after a change, so they are not in {outOf}.{' '}
-              {withGuests.length} of them {withGuests.length === 1 ? 'has' : 'have'} guests who will need a hotel ({guests} guests). They join {outOf}
+              {tours.length} {tours.length === 1 ? 'tour is' : 'tours are'} not approved in NKERP yet, or waiting for re-approval after a change, so they are not in the approved plan.{' '}
+              {withGuests.length} of them {withGuests.length === 1 ? 'has' : 'have'} guests who will need a hotel ({guests} guests). They join the approved plan
               by themselves once approved and pulled again.
             </p>
             <label className="switch" style={{ marginTop: 12 }}>
@@ -67,51 +67,54 @@ export function PendingTours({ tours, city = 'Najaf', outOf = 'the plan', change
                   <th scope="col">Arrives</th>
                   <th scope="col">Leaves</th>
                   <th scope="col">Ports</th>
-                  <th scope="col">{city}</th>
+                  <th scope="col">Najaf</th>
                   <th scope="col" className="n">
                     Guests
                   </th>
                   <th scope="col" className="n">
                     Need a hotel
                   </th>
-                  <th scope="col" className="n">
-                    Housed by NKERP
-                  </th>
                   <th scope="col">Note</th>
                 </tr>
               </thead>
               <tbody>
-                {shown.map((t) => (
-                  <tr key={t.tourId} data-quiet={!t.needHotel}>
-                    <th scope="row" className="tour">
-                      {t.tourNo}
-                      <ReapprovalBadge change={changes?.[t.tourId]} />
-                    </th>
-                    <td>{t.status}</td>
-                    <td>{t.start ? dayMonth(t.start) : '–'}</td>
-                    <td>{t.end ? dayMonth(t.end) : '–'}</td>
-                    <td className="ports">
-                      {t.entryPort || '?'}
-                      {t.exitPort && t.exitPort !== t.entryPort ? ` → ${t.exitPort}` : ''}
-                    </td>
-                    <td>
-                      {(t.stays ?? t.najaf).length ? (
-                        <>
-                          {(t.stays ?? t.najaf).map((n) => rangeLabel(n.checkIn, n.checkOut)).join(', ')}
-                          {t.route ? <small className="route">{t.route}</small> : null}
-                        </>
-                      ) : (
-                        <span className="muted">No dates in NKERP yet</span>
-                      )}
-                    </td>
-                    <td className="n">{t.pax}</td>
-                    <td className="n strong">{t.needHotel ?? '–'}</td>
-                    <td className="n">{t.housed ?? '–'}</td>
-                    <td className="notes">
-                      <span className="note">{t.remarks}</span>
-                    </td>
-                  </tr>
-                ))}
+                {shown.map((t) => {
+                  const input = tourInput(inputs, t, meta);
+                  const pax = input?.pax ?? t.needHotel;
+                  return (
+                    <tr key={t.tourId} data-quiet={!pax}>
+                      <th scope="row" className="tour">
+                        {t.tourNo}
+                        <ReapprovalBadge change={meta.reapprovals?.[t.tourId]} />
+                      </th>
+                      <td>{t.status}</td>
+                      <td>{t.start ? dayMonth(t.start) : '–'}</td>
+                      <td>{t.end ? dayMonth(t.end) : '–'}</td>
+                      <td className="ports">
+                        {t.entryPort || '?'}
+                        {t.exitPort && t.exitPort !== t.entryPort ? ` → ${t.exitPort}` : ''}
+                      </td>
+                      <td>
+                        {(t.stays ?? t.najaf).length ? (
+                          <>
+                            {(t.stays ?? t.najaf).map((n) => rangeLabel(n.checkIn, n.checkOut)).join(', ')}
+                            {t.route ? <small className="route">{t.route}</small> : null}
+                          </>
+                        ) : (
+                          <span className="muted">No dates in NKERP yet</span>
+                        )}
+                      </td>
+                      <td className="n">{t.pax}</td>
+                      <td className="n strong">
+                        <PaxInput tourNo={t.tourNo} pax={pax} nkerpPax={input?.pax !== undefined ? t.needHotel : undefined}
+                          paxBefore={input?.paxBefore} onChange={(change) => onEdit(t, change)} />
+                      </td>
+                      <td className="notes">
+                        <span className="note">{t.remarks}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
