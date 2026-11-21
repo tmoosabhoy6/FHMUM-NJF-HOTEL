@@ -215,9 +215,9 @@ function Planner({ dataset, inputs, settings }: { dataset: PullResult; inputs: T
           Tour arrivals through
           <input type="date" value={to} min={from} max={coveredThrough} onChange={(event) => setDates({ from, to: event.target.value || coveredThrough })} />
         </label>
-        <p>NKERP data pulled {pullTime.format(new Date(meta.fetchedAt))}, Baghdad time. Coverage through {fullDate(coveredThrough)}.</p>
+        <p>NKERP data pulled {pullTime.format(new Date(meta.fetchedAt))}, Najaf local time. Coverage through {fullDate(coveredThrough)}.</p>
       </div>
-      {!meta.coveredThrough && <p className="approval-notice">This saved pull predates the approval planner. Refresh NKERP data to verify pending hotel pax, Baghdad trip dates and departure flights.</p>}
+      {!meta.coveredThrough && <p className="approval-notice">This saved pull predates the approval planner. Refresh NKERP data to verify pending hotel pax, trip dates and departure flights.</p>}
       {plan === undefined && <p className="read-empty" role="status">Building the approval plan…</p>}
       {plan === null && <p className="read-empty" role="alert">The approval planner could not finish. Try a shorter date range.</p>}
       {plan && (
