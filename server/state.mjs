@@ -1,22 +1,20 @@
 /**
- * The app's shared saved state: the last pull, room requests and hotel
- * choices, what the plan was last built from, hotel settings and the date
- * range; and the same for the Karbala tab (karbala* keys: its last pull, room
- * requests, what its messages were last built from, its date range). One copy for everyone, so every device and every link to the app
- * sees the same thing.
+ * Shared city snapshots, staff edits, hotel settings and date ranges.
  *
- *   GET   /api/state?since=N   keys changed after version N (all keys when N is 0)
- *   PUT   /api/state/{key}     replace one key's value (JSON body)
- *   PATCH /api/state/{key}     set or remove fields of an object key: {"2270": {...}, "2271": null}
+ *   GET   /api/state?since=N         read keys changed after version N
+ *   PATCH /api/state/{key}/{tour}    merge selected fields on one tour
+ *   PUT   /api/state/{key}           save settings/range or clear tour edits
  *
- * Every write bumps one version counter, so a device polls with the last
- * version it saw and gets only what changed.
- *
- * Stores: D1 on Cloudflare (d1Store), a JSON file for `npm run dev` (fileStore).
+ * An NKERP pull commits both city snapshots and the itinerary history at
+ * one version. Staff edits use separate keys so a pull cannot replace them.
+ * D1 backs the Worker, and a JSON file backs the local Node server.
  */
 
 export const STATE_KEYS = new Set(['dataset', 'inputs', 'applied', 'prefs', 'range', 'karbalaDataset', 'karbalaInputs', 'karbalaApplied', 'karbalaRange']);
-/** Keys holding one entry per tour, which devices change field by field. */
+const PULL_KEYS = ['dataset', 'karbalaDataset', 'pullHistory'];
+const TOUR_KEYS = new Set(['inputs', 'karbalaInputs']);
+const TOUR_KEY = /^tour-[1-9]\d{0,11}$/;
+// Older open tabs may still patch entries by display number.
 const PATCH_KEYS = new Set(['inputs', 'applied', 'karbalaInputs', 'karbalaApplied']);
 const FIELD = /^[A-Za-z0-9 _.\/-]{1,60}$/;
 const MAX_BODY = 1_500_000;
@@ -26,12 +24,13 @@ const json = (status, body) =>
 
 /** Handles /api/state requests (Fetch API Request → Response). */
 export async function handleState(request, url, store) {
-  const key = decodeURIComponent(url.pathname.replace(/^\/api\/state\/?/, ''));
+  const [key = '', tour, ...extra] = url.pathname.replace(/^\/api\/state\/?/, '').split('/');
+  if (extra.length) return json(404, { error: 'Unknown key' });
   if (request.method === 'GET' && !key) {
     const since = Math.max(0, Number(url.searchParams.get('since')) || 0);
     const { rows, version } = await store.list(since);
     const values = {};
-    for (const row of rows) values[row.key] = JSON.parse(row.value);
+    for (const row of rows) if (STATE_KEYS.has(row.key)) values[row.key] = JSON.parse(row.value);
     return json(200, { version, values });
   }
   if (!STATE_KEYS.has(key)) return json(404, { error: 'Unknown key' });
@@ -45,7 +44,15 @@ export async function handleState(request, url, store) {
   } catch {
     return json(400, { error: 'Not JSON' });
   }
-  if (request.method === 'PUT') return json(200, { version: await store.put(key, JSON.stringify(body)) });
+  if (tour !== undefined) {
+    if (request.method !== 'PATCH' || !TOUR_KEYS.has(key) || !TOUR_KEY.test(tour)) return json(404, { error: 'Unknown tour edits' });
+    if (!validTourEdit(body)) return json(400, { error: 'Invalid tour edits' });
+    return json(200, { version: await store.editTour(key, tour, body.legacyKey, body.changes) });
+  }
+  if (request.method === 'PUT') {
+    if (PULL_KEYS.includes(key)) return json(405, { error: 'Only an NKERP pull can refresh this data' });
+    return json(200, { version: await store.put(key, JSON.stringify(body)) });
+  }
 
   if (!PATCH_KEYS.has(key)) return json(400, { error: 'This key is replaced whole' });
   if (!body || typeof body !== 'object' || Array.isArray(body)) return json(400, { error: 'Send an object' });
@@ -54,10 +61,33 @@ export async function handleState(request, url, store) {
   return json(200, { version: await store.patch(key, fields) });
 }
 
+function validTourEdit(body) {
+  if (!body || (body.legacyKey !== null && (typeof body.legacyKey !== 'string' || !FIELD.test(body.legacyKey))) || !body.changes ||
+      typeof body.changes !== 'object' || Array.isArray(body.changes)) return false;
+  const fields = Object.entries(body.changes);
+  return fields.length > 0 && fields.every(([field, value]) => {
+    switch (field) {
+      case 'paxBefore':
+      case 'pax': return value === null || (Number.isInteger(value) && value >= 0 && value <= 9999);
+      case 'spec': return value === null || (typeof value === 'string' && value.length <= 1000);
+      case 'pin': return value === null || ['ruya', 'araf', 'c'].includes(value);
+      case 'roomNos': return value === null || (Array.isArray(value) && value.length <= 100 &&
+        value.every((room) => typeof room === 'string' && /^[A-Za-z0-9 -]{1,25}$/.test(room)));
+      default: return false;
+    }
+  });
+}
+
+const pullSnapshot = (rows) => ({
+  values: Object.fromEntries(rows.map(({ key, value }) => [key, JSON.parse(value)])),
+  version: rows.reduce((version, row) => Math.max(version, row.version), 0),
+});
+
 // ---- D1 (Cloudflare) -------------------------------------------------------
 
 const SCHEMA = 'CREATE TABLE IF NOT EXISTS state (key TEXT PRIMARY KEY, value TEXT NOT NULL, version INTEGER NOT NULL)';
 const NEXT = '(SELECT COALESCE(MAX(version), 0) + 1 FROM state)';
+const PULL_FILTER = "key IN ('dataset', 'karbalaDataset', 'pullHistory')";
 
 export function d1Store(db) {
   let ready = null;
@@ -66,7 +96,7 @@ export function d1Store(db) {
     async list(since) {
       await init();
       const [rows, top] = await db.batch([
-        db.prepare('SELECT key, value, version FROM state WHERE version > ?1').bind(since),
+        db.prepare("SELECT key, value, version FROM state WHERE version > ?1 AND key <> 'pullHistory'").bind(since),
         db.prepare('SELECT COALESCE(MAX(version), 0) AS v FROM state'),
       ]);
       return { rows: rows.results, version: top.results[0].v };
@@ -77,6 +107,35 @@ export function d1Store(db) {
         .prepare(`INSERT INTO state (key, value, version) VALUES (?1, ?2, ${NEXT}) ON CONFLICT(key) DO UPDATE SET value = excluded.value, version = excluded.version RETURNING version`)
         .bind(key, value)
         .first();
+      return row.version;
+    },
+    async readPull() {
+      await init();
+      const { results } = await db.prepare(`SELECT key, value, version FROM state WHERE ${PULL_FILTER}`).all();
+      return pullSnapshot(results);
+    },
+    async savePull(expected, values) {
+      await init();
+      const row = await db.prepare(`
+        WITH revision AS MATERIALIZED (
+          SELECT ${NEXT} AS next, (SELECT COALESCE(MAX(version), 0) FROM state WHERE ${PULL_FILTER}) AS current
+        ), updates(key, value) AS (VALUES ('dataset', ?2), ('karbalaDataset', ?3), ('pullHistory', ?4))
+        INSERT INTO state (key, value, version)
+          SELECT key, value, next FROM updates, revision WHERE current = ?1
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value, version = excluded.version
+        RETURNING version
+      `).bind(expected, ...PULL_KEYS.map((key) => JSON.stringify(values[key]))).first();
+      return Boolean(row);
+    },
+    async editTour(key, tour, legacy, changes) {
+      await init();
+      const row = await db.prepare(`
+        INSERT INTO state (key, value, version) VALUES (?1, json_object(?5, json_patch('{}', ?4)), ${NEXT})
+        ON CONFLICT(key) DO UPDATE SET
+          value = json_set(state.value, ?2, json_patch(COALESCE(json_extract(state.value, ?2), json_extract(state.value, ?3), '{}'), ?4)),
+          version = excluded.version
+        RETURNING version
+      `).bind(key, `$."${tour}"`, legacy === null ? null : `$."${legacy}"`, JSON.stringify(changes), tour).first();
       return row.version;
     },
     async patch(key, fields) {
@@ -108,33 +167,49 @@ export async function fileStore(path) {
   } catch {
     /* first run */
   }
-  const write = () => {
+  const write = (keys) => {
+    const next = { version: data.version + 1, keys: { ...data.keys } };
+    for (const [key, value] of Object.entries(keys)) next.keys[key] = { value, version: next.version };
     fs.mkdirSync(dirname(path), { recursive: true });
-    fs.writeFileSync(path, JSON.stringify(data));
+    fs.writeFileSync(path + '.tmp', JSON.stringify(next));
+    fs.renameSync(path + '.tmp', path);
+    data = next;
+    return next.version;
   };
-  const bump = (key, value) => {
-    data.version += 1;
-    data.keys[key] = { value, version: data.version };
-    write();
-    return data.version;
-  };
+  const rows = () => Object.entries(data.keys).map(([key, row]) => ({ key, ...row }));
+  const readPull = () => pullSnapshot(rows().filter((row) => PULL_KEYS.includes(row.key)));
   return {
     async list(since) {
-      const rows = Object.entries(data.keys)
-        .filter(([, row]) => row.version > since)
-        .map(([key, row]) => ({ key, value: row.value, version: row.version }));
-      return { rows, version: data.version };
+      return { rows: rows().filter((row) => row.version > since), version: data.version };
     },
     async put(key, value) {
-      return bump(key, value);
+      return write({ [key]: value });
+    },
+    async readPull() {
+      return readPull();
+    },
+    async savePull(expected, values) {
+      if (readPull().version !== expected) return false;
+      write(Object.fromEntries(PULL_KEYS.map((key) => [key, JSON.stringify(values[key])])));
+      return true;
+    },
+    async editTour(key, tour, legacy, changes) {
+      const current = JSON.parse(data.keys[key]?.value ?? '{}');
+      const input = { ...(current[tour] ?? (legacy && Object.hasOwn(current, legacy) ? current[legacy] : {})) };
+      for (const [field, value] of Object.entries(changes)) {
+        if (value === null) delete input[field];
+        else input[field] = value;
+      }
+      current[tour] = input;
+      return write({ [key]: JSON.stringify(current) });
     },
     async patch(key, fields) {
       const current = JSON.parse(data.keys[key]?.value ?? '{}');
       for (const [field, value] of fields) {
         if (value === null || value === undefined) delete current[field];
-        else current[field] = value;
+        else Object.defineProperty(current, field, { value, enumerable: true, writable: true, configurable: true });
       }
-      return bump(key, JSON.stringify(current));
+      return write({ [key]: JSON.stringify(current) });
     },
   };
 }

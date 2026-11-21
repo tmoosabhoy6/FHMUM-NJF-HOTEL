@@ -234,7 +234,8 @@ describe('the pull', () => {
         if (event === 'day' && data.date) lit.push(data.date);
       },
     });
-    expect(result.groups).toHaveLength(1);
+    expect(result.groups).toHaveLength(2);
+    expect(result.groups).toContainEqual(expect.objectContaining({ tourId: 5002, pax: 0 }));
     expect(result.groups[0]).toMatchObject({ tourNo: '9001', pax: 2, paxNkerpHoused: 2, leader: 'A B' });
     expect(result.meta).toMatchObject({ approvedStays: 2, nkerpHousedOnly: 1, notApproved: 1, toursRead: 2 });
     expect(client.calls.filter((c) => c.startsWith('GET api/tours/getApplicants'))).toEqual(['GET api/tours/getApplicants/5001', 'GET api/tours/getApplicants/5002']);

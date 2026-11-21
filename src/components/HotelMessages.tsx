@@ -13,16 +13,13 @@ const KIND_KEY = 'njf.messageKind.v1';
 interface Props {
   groups: Group[];
   plan: Plan;
-  /** Tours changed since the plan was last refreshed. */
-  pending: number;
-  onRefresh: () => void;
   onClose: () => void;
 }
 
 type Item = HotelMessage & { hotel: HotelId; leader: string };
 
 /** The room-request messages to send to the hotels, one per group, by arrival date. */
-export function HotelMessages({ groups, plan, pending, onRefresh, onClose }: Props) {
+export function HotelMessages({ groups, plan, onClose }: Props) {
   const names = useNames();
   const [hotel, setHotel] = useState<HotelId | 'all'>('all');
   const [copied, setCopied] = useState<string | null>(null);
@@ -81,15 +78,6 @@ export function HotelMessages({ groups, plan, pending, onRefresh, onClose }: Pro
         <div className="drawer-body">
           <section className="set">
             <p>One message per group, ready to send to its hotel, by the day the group checks in. Copy one, or every message for a day.</p>
-            {pending ? (
-              <p className="msg-stale">
-                {pending} {pending === 1 ? 'tour has' : 'tours have'} changes that are not in the plan yet.{' '}
-                <button className="linkish" onClick={onRefresh}>
-                  Refresh plan
-                </button>{' '}
-                first so the messages include them.
-              </p>
-            ) : null}
             <div className="msg-kind" role="radiogroup" aria-label="Message type">
               {(
                 [
@@ -143,7 +131,7 @@ export function HotelMessages({ groups, plan, pending, onRefresh, onClose }: Pro
                           {copied === m.groupId ? 'Copied' : 'Copy'}
                         </button>
                       </div>
-                      {m.rooms ? null : <p className="msg-warn">No rooms yet: type or choose them in the Groups table, then refresh the plan.</p>}
+                      {m.rooms ? null : <p className="msg-warn">No rooms yet: type or choose them in the Groups table.</p>}
                       {kind === 'rooms' && m.rooms && !m.numbered ? (
                         <p className="msg-note">No room numbers: the plan only numbers {names.ruya} rooms.</p>
                       ) : null}

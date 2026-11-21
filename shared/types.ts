@@ -1,4 +1,4 @@
-/** Facts about one group's stay in Najaf, exactly as pulled from NKERP. */
+/** A group's city stay and the guest count used by the planner. */
 export interface Group {
   id: string;
   tourId: number;
@@ -13,6 +13,10 @@ export interface Group {
    * "accommodation not required" in NKERP, infants not counted (no bed).
    */
   pax: number;
+  /** The NKERP hotel pax when the planner is using a staff override. */
+  nkerpPax?: number;
+  /** The NKERP count when the staff override was first entered. */
+  paxBefore?: number;
   /** Infants among those guests (they share a bed, so they are not in `pax`). */
   infants: number;
   /** All active guests on the tour. */
@@ -36,6 +40,13 @@ export interface Group {
 
 export type Venue = 'najaf' | 'karbala';
 
+export interface DateChange {
+  tourNo: string;
+  before: string[];
+  after: string[];
+  at: string;
+}
+
 export interface PullMeta {
   source: 'nkerp' | 'sample';
   /** The city pulled (absent on pulls made before the Karbala tab: Najaf). */
@@ -51,8 +62,14 @@ export interface PullMeta {
   nkerpHousedOnly: number;
   /** Tours in the range that are not approved yet (Pending, Draft…), so not planned. */
   notApproved: number;
-  /** Approved tours that were updated and await re-approval; planned with their latest dates. */
+  /** Previously approved tours that were updated and still await NKERP re-approval. */
   reapproval?: number;
+  /** Tour IDs that changed itinerary on this pull, including tours that moved out of the range. */
+  changes?: (DateChange & { tourId: number })[];
+  reapprovals?: Record<number, DateChange>;
+  /** Exact owners of pre-existing room requests saved by display number. */
+  legacyInputKeys?: Record<number, string>;
+  awaiting?: { tourId: number; tourNo: string }[];
   /** Tours in the range that are not approved yet, with what NKERP says about them. */
   pending?: PendingTour[];
   /** Guest lists read, one per tour. */
@@ -99,6 +116,9 @@ export interface RuyaRoom {
 
 /** What a person typed for one group. */
 export interface GroupInput {
+  /** Number of guests to book for this tour in this city. Zero skips allocation. */
+  pax?: number;
+  paxBefore?: number;
   /** Rooms needed in Ruya, as typed or pasted. */
   spec?: string;
   /** Keep this group in a chosen hotel instead of letting the planner decide. */

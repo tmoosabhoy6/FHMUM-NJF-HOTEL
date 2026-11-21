@@ -115,7 +115,8 @@ describe('the Karbala pull', () => {
       office: OFFICE,
       emit: (event: string, data: { detail?: string }) => event === 'step' && data.detail && steps.push(data.detail),
     });
-    expect(result.groups).toHaveLength(1);
+    expect(result.groups).toHaveLength(2);
+    expect(result.groups).toContainEqual(expect.objectContaining({ tourId: 7005, pax: 0 }));
     expect(result.groups[0]).toMatchObject({ tourNo: '9101', pax: 2, infants: 1, leader: 'Leader One', checkIn: '2026-12-07', checkOut: '2026-12-11' });
     expect(result.meta).toMatchObject({ venue: 'karbala', approvedStays: 2, nkerpHousedOnly: 1, notApproved: 1 });
     expect(result.meta.pending).toEqual([expect.objectContaining({ tourNo: '9104', needHotel: 5, stays: [{ checkIn: '2026-12-08', checkOut: '2026-12-12' }] })]);

@@ -158,9 +158,9 @@ export function SettingsDrawer({ prefs, beds, onChange, onClose, onClearInputs, 
           </section>
 
           <section className="set">
-            <h3>Typed rooms and hotel choices</h3>
+            <h3>Najaf pax, rooms and hotel choices</h3>
             <p>
-              {typedCount ? `Saved on this device for ${typedCount} ${typedCount === 1 ? 'tour' : 'tours'}.` : 'Nothing saved yet.'} They stay when you pull
+              {typedCount ? `Saved for everyone for ${typedCount} ${typedCount === 1 ? 'tour' : 'tours'}.` : 'Nothing saved yet.'} They stay when you pull
               again.
             </p>
             <div className="room-actions">
@@ -168,7 +168,7 @@ export function SettingsDrawer({ prefs, beds, onChange, onClose, onClearInputs, 
                 className="btn"
                 disabled={!typedCount}
                 onClick={() => {
-                  if (window.confirm('Clear the rooms and hotel choices saved for every tour?')) onClearInputs();
+                  if (window.confirm('Clear all Najaf pax overrides, room requests and hotel choices?')) onClearInputs();
                 }}
               >
                 Clear them all

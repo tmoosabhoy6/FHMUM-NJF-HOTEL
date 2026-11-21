@@ -8,7 +8,8 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NkerpError, sharedClient } from './nkerp/client.mjs';
-import { DEFAULT_OFFICE, runSync } from './nkerp/sync.mjs';
+import { DEFAULT_OFFICE } from './nkerp/sync.mjs';
+import { refreshFromNkerp, validPullRange } from './pull.mjs';
 import { fileStore, handleState } from './state.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -16,7 +17,6 @@ const DIST = join(ROOT, 'dist');
 const DEV = process.argv.includes('--dev');
 const PORT = Number(process.env.PORT) || 8787;
 const OFFICE = process.env.NKERP_OFFICE_NAME || DEFAULT_OFFICE;
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -40,7 +40,7 @@ async function handleSync(req, res, url) {
   const to = url.searchParams.get('to') || null;
   const venue = url.searchParams.get('venue') || 'najaf';
   if (venue !== 'najaf' && venue !== 'karbala') return json(res, 400, { error: 'Unknown city' });
-  if (!ISO_DATE.test(from) || (to && !ISO_DATE.test(to)) || (to && to < from)) {
+  if (!validPullRange(from, to)) {
     return json(res, 400, { error: 'Choose a start date, and an end date that is not before it.' });
   }
   res.writeHead(200, {
@@ -56,7 +56,7 @@ async function handleSync(req, res, url) {
   };
   const beat = setInterval(() => !res.writableEnded && res.write(': keep-alive\n\n'), 15_000);
   try {
-    const result = await runSync({ client: sharedClient(), from, to, venue, office: OFFICE, emit, signal: abort.signal });
+    const result = await refreshFromNkerp({ store, client: sharedClient(), from, to, venue, office: OFFICE, emit, signal: abort.signal });
     emit('done', result);
   } catch (error) {
     if (!abort.signal.aborted) {

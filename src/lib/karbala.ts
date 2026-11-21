@@ -1,104 +1,70 @@
-/**
- * The Karbala tab's state: its own pull, the rooms typed per tour, and what
- * the messages were last built from. Saved for everyone like Najaf's
- * (karbala* keys on the server, lib/shared.ts), with a local copy for the
- * first paint. Lives in App so other devices' changes keep arriving while
- * the Najaf tab is open.
- */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Group, GroupInput, PullMeta } from '../../shared/types';
-import { inputKey } from './inputs';
+import type { Group } from '../../shared/types';
+import { editInput, inputKey, legacyKey, tourInput, withHotelPax, type InputChange, type TourInputs } from './inputs';
 import type { SharedState, Values } from './shared';
 import { load, save } from './storage';
-import { emptyProgress, startPull, type PullProgress } from './sync';
-
-export interface KarbalaDataset {
-  groups: Group[];
-  meta: PullMeta;
-}
+import { emptyProgress, startPull, type PullProgress, type PullResult } from './sync';
 
 export interface Range {
   from: string;
   to: string;
 }
 
-const KEY = { data: 'kbl.dataset.v1', inputs: 'kbl.inputs.v1', applied: 'kbl.applied.v1', range: 'kbl.range.v1' };
-const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+const KEY = { data: 'kbl.dataset.v1', inputs: 'kbl.inputs.v1', range: 'kbl.range.v1' };
 
-export function useKarbala(shared: SharedState, loaded: boolean, defaultRange: Range) {
-  const [dataset, setDataset] = useState<KarbalaDataset | null>(() => load<KarbalaDataset | null>(KEY.data, null));
-  // What staff have typed (shown at once) and what the messages were last built from ("Refresh messages").
-  const [typed, setTyped] = useState<Record<string, GroupInput>>(() => load(KEY.inputs, {}));
-  const [applied, setApplied] = useState<Record<string, GroupInput>>(() => load(KEY.applied, {}));
+export function useKarbala(shared: SharedState, defaultRange: Range, poll: () => void) {
+  const [dataset, setDataset] = useState(() => load<PullResult | null>(KEY.data, null));
+  const [typed, setTyped] = useState<TourInputs>(() => load(KEY.inputs, {}));
   const [range, setRange] = useState<Range>(() => load(KEY.range, defaultRange));
   const [pulling, setPulling] = useState(false);
   const [progress, setProgress] = useState<PullProgress>(emptyProgress);
   const [error, setError] = useState<string | null>(null);
-  const [refreshed, setRefreshed] = useState(false);
   const cancel = useRef<(() => void) | null>(null);
-  const latest = useRef({ dataset, typed, applied, range });
-  latest.current = { dataset, typed, applied, range };
+  const latestDataset = useRef(dataset);
+  latestDataset.current = dataset;
 
   useEffect(() => save(KEY.inputs, typed), [typed]);
-  useEffect(() => save(KEY.applied, applied), [applied]);
   useEffect(() => save(KEY.range, range), [range]);
-  useEffect(() => {
-    if (loaded) shared.put('karbalaRange', range);
-  }, [loaded, range, shared]);
   useEffect(() => () => cancel.current?.(), []);
 
-  /** Values from the server (first read and every poll). */
-  const apply = useCallback(
-    (values: Values) => {
-      const now = latest.current;
-      if ('karbalaDataset' in values && values.karbalaDataset && !same(values.karbalaDataset, now.dataset)) {
-        const next = values.karbalaDataset as KarbalaDataset;
-        save(KEY.data, next);
-        setDataset(next);
-      }
-      if ('karbalaInputs' in values) {
-        const next = { ...(values.karbalaInputs as Record<string, GroupInput>) };
-        for (const [k, v] of Object.entries(shared.pendingFields('karbalaInputs'))) {
-          if (v === null) delete next[k];
-          else next[k] = v as GroupInput;
-        }
-        if (!same(next, now.typed)) setTyped(next);
-      }
-      if ('karbalaApplied' in values && !shared.busy('karbalaApplied') && !same(values.karbalaApplied, now.applied)) {
-        setApplied((values.karbalaApplied ?? {}) as Record<string, GroupInput>);
-      }
-      if ('karbalaRange' in values && values.karbalaRange && !shared.busy('karbalaRange') && !same(values.karbalaRange, now.range)) {
-        setRange(values.karbalaRange as Range);
-      }
-    },
-    [shared],
-  );
+  const accept = (next: PullResult) => {
+    if (next.meta.fetchedAt < (latestDataset.current?.meta.fetchedAt ?? '')) return;
+    latestDataset.current = next;
+    save(KEY.data, next);
+    setDataset(next);
+  };
 
-  const pull = useCallback(() => {
+  const apply = (values: Values, first: boolean) => {
+    if (values.karbalaDataset) accept(values.karbalaDataset as PullResult);
+    if ('karbalaInputs' in values || first) setTyped(shared.withPending('karbalaInputs', (values.karbalaInputs ?? {}) as TourInputs));
+    if (values.karbalaRange && !shared.pending('karbalaRange')) setRange(values.karbalaRange as Range);
+    else if (first && !latestDataset.current) setRange(defaultRange);
+  };
+
+  const pull = () => {
     cancel.current?.();
     setProgress(emptyProgress());
     setError(null);
     setPulling(true);
-    const { from, to } = latest.current.range;
     cancel.current = startPull(
-      { from, to: to || null, source: 'nkerp', venue: 'karbala' },
+      { from: range.from, to: range.to || null, source: 'nkerp', venue: 'karbala' },
       {
         onProgress: (update) => setProgress(update),
         onDone: (result) => {
-          save(KEY.data, result);
-          shared.put('karbalaDataset', result);
-          setDataset(result);
+          cancel.current = null;
+          accept(result);
           setPulling(false);
+          poll();
         },
         onFailed: (message) => {
           setError(message);
           setPulling(false);
+          poll();
         },
       },
     );
-  }, [shared]);
+  };
 
-  /** Stops a pull, or puts away its error. */
   const stop = useCallback(() => {
     cancel.current?.();
     cancel.current = null;
@@ -106,36 +72,21 @@ export function useKarbala(shared: SharedState, loaded: boolean, defaultRange: R
     setError(null);
   }, []);
 
-  /** Rooms typed for one tour (kept by tour number, so they survive a new pull). */
-  const onInput = useCallback(
-    (tourNo: string, spec: string) => {
-      const key = inputKey({ tourNo });
-      const copy = { ...latest.current.typed };
-      if (spec.trim()) copy[key] = { spec };
-      else delete copy[key];
-      latest.current.typed = copy;
-      setTyped(copy);
-      shared.patch('karbalaInputs', key, spec.trim() ? { spec } : null);
-    },
-    [shared],
-  );
+  const onInput = (group: Group, changes: InputChange) => {
+    const legacy = legacyKey(group, dataset?.meta);
+    setTyped((all) => editInput(all, inputKey(group), legacy, changes));
+    shared.edit('karbalaInputs', group, legacy, changes);
+  };
 
-  const refresh = useCallback(() => {
-    const typedNow = latest.current.typed;
-    setApplied(typedNow);
-    shared.put('karbalaApplied', typedNow);
-    setRefreshed(true);
-    window.setTimeout(() => setRefreshed(false), 2400);
-  }, [shared]);
+  const groups = useMemo(() => withHotelPax(dataset?.groups ?? [], typed, dataset?.meta), [dataset, typed]);
+  const inputs = useMemo(() => Object.fromEntries(groups.map((g) => [g.id, tourInput(typed, g, dataset?.meta)])), [groups, typed, dataset]);
+  const changeRange = (update: (previous: Range) => Range) => {
+    const next = update(range);
+    setRange(next);
+    shared.put('karbalaRange', next);
+  };
 
-  const groups = useMemo(() => dataset?.groups ?? [], [dataset]);
-  /** Tours in this pull whose typed rooms differ from what the messages were built with. */
-  const pending = useMemo(() => {
-    const keys = new Set(groups.filter((g) => g.pax > 0).map(inputKey));
-    return [...keys].filter((k) => (typed[k]?.spec ?? '') !== (applied[k]?.spec ?? '')).length;
-  }, [groups, typed, applied]);
-
-  return { dataset, groups, typed, applied, range, setRange, pulling, progress, error, refreshed, pending, apply, pull, stop, onInput, refresh };
+  return { dataset, groups, inputs, range, setRange: changeRange, pulling, progress, error, apply, pull, stop, onInput };
 }
 
 export type Karbala = ReturnType<typeof useKarbala>;
