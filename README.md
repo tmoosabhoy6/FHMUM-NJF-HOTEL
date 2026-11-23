@@ -78,7 +78,10 @@ Build): every push to `main` builds with `npm run build` and deploys with
 4. **Hotel messages.** One message per group in the team's format (`shared/messages.ts`),
    by check-in date, filtered by hotel, with a Copy button on each and "Copy
    all" per date. Two types: requirements only, or with the planned room
-   numbers on each room line (`- Room no. 106, 107`). "Download Excel" exports the plan; its "Bookings to make" sheet has one row per tour per hotel (first and last night, nights, guests, arrival and departure flight or subvenue).
+   numbers on each room line (`- Room no. 106, 107`). The dates are the first night and the
+   day the group actually leaves. When an Iraqi Airways departure day is
+   booked as a night, the night count includes it (`NAJAF (05 NIGHT)`) but
+   the second date is still the real departure date (`08-12-2026 TO 12-12-2026`). "Download Excel" exports the plan; its "Bookings to make" sheet has one row per tour per hotel (first and last night, nights, guests, arrival and departure flight or subvenue).
 
 ## Karbala Hotel Messages tab
 

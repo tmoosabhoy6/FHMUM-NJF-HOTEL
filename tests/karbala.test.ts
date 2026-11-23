@@ -174,7 +174,9 @@ describe('Karbala messages', () => {
     const ia = group({ departure: { kind: 'airport', place: 'Baghdad Airport', flight: 'IA 441', airline: 'IA' } });
     const [on] = karbalaRows([ia], {}, { departureDayRule: true });
     expect(on).toMatchObject({ nights: ['2026-12-07', '2026-12-08', '2026-12-09', '2026-12-10'], departureDay: true });
-    expect(on.message?.text).toContain('KARBALA (04 NIGHT)\n07-12-2026 TO 11-12-2026');
+    // Four nights booked, but the dates show the day the group actually leaves.
+    expect(on.message?.text).toContain('KARBALA (04 NIGHT)\n07-12-2026 TO 10-12-2026');
+    expect(on.message?.to).toBe('2026-12-10');
     expect(karbalaRows([ia], {}, { departureDayRule: false })[0].nights).toHaveLength(3);
     // Karbala first (not the second half): no extra night.
     expect(karbalaRows([{ ...ia, secondLeg: false, arrival: { kind: 'airport', place: 'Najaf Airport', flight: 'IA 1' } }], {}, { departureDayRule: true })[0].nights).toHaveLength(3);

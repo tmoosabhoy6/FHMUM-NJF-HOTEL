@@ -342,9 +342,28 @@ describe('hotel messages', () => {
     const plan = buildPlan({ groups: [filler, g], inputs: {}, settings: DEFAULT_SETTINGS, from: '2026-12-03' });
     const message = hotelMessage(g, plan.placements.ia)!;
     expect(plan.placements.ia.hotel).toBe('araf');
-    expect(message.text).toContain('NAJAF (05 NIGHT)\n03-12-2026 TO 08-12-2026');
+    // Five nights booked (the departure day included), but the dates show the day the group actually leaves.
+    expect(message.text).toContain('NAJAF (05 NIGHT)\n03-12-2026 TO 07-12-2026');
+    expect(message.to).toBe('2026-12-07');
     expect(message.rooms).toBeNull();
     expect(message.text).toContain(' To be confirmed');
+  });
+});
+
+describe('hotel message for a second-leg Iraqi Airways group (tour 2707)', () => {
+  it('keeps the booked departure night in the count and shows the real departure date', () => {
+    const g = group({
+      id: 'bm', tourNo: '2707', leader: 'Burhanuddin Malek', pax: 29, checkIn: '2026-12-08', checkOut: '2026-12-12',
+      departure: { kind: 'airport', place: 'Najaf Airport', flight: 'IA 449', airline: 'IA' },
+    });
+    const plan = buildPlan({ groups: [g], inputs: { bm: { spec: '2X7, 3X5,' } }, settings: DEFAULT_SETTINGS, from: '2026-12-08' });
+    expect(plan.placements.bm.nights).toEqual(['2026-12-08', '2026-12-09', '2026-12-10', '2026-12-11', '2026-12-12']);
+    const message = hotelMessage(g, plan.placements.bm)!;
+    expect(message.text).toContain('Hotel pax - 29\n\nNAJAF (05 NIGHT)\n08-12-2026 TO 12-12-2026\n');
+    expect(message.text).toContain('TOTAL- 29 BEDS');
+    // Without the rule the stay is four nights, and the dates are the same.
+    const off = buildPlan({ groups: [g], inputs: {}, settings: { ...DEFAULT_SETTINGS, departureDayRule: false }, from: '2026-12-08' });
+    expect(hotelMessage(g, off.placements.bm)!.text).toContain('NAJAF (04 NIGHT)\n08-12-2026 TO 12-12-2026');
   });
 });
 

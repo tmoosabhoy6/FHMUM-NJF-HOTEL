@@ -16,6 +16,10 @@
  *
  *   TOTAL- 23 BEDS
  *
+ * The dates are the first night and the day the group leaves. When an Iraqi
+ * Airways departure day is booked as a night, the night count includes it but
+ * the second date stays the actual departure date.
+ *
  * With room numbers, each room line ends with the rooms planned for it:
  *    02 beds x   06 Rooms = 12 beds - Room no. 106, 107, 110, 205, 206, 210
  */
@@ -30,7 +34,11 @@ const dmy = (date: string) => `${date.slice(8, 10)}-${date.slice(5, 7)}-${date.s
 export interface HotelMessage {
   groupId: string;
   tourNo: string;
-  /** First night and the day after the last night (the hotel's check-in and check-out). */
+  /**
+   * First night and the group's actual departure date. When the Iraqi
+   * Airways rule books the departure day as a night, `to` is still the day
+   * the group leaves, not the day after that extra night.
+   */
   from: string;
   to: string;
   nights: number;
@@ -50,6 +58,8 @@ interface MessageParts {
   city: string;
   /** Every night the group sleeps there, in order. */
   nights: string[];
+  /** The day the group actually leaves. Defaults to the day after the last night. */
+  departure?: string;
   /** Bed count of each room, or null when no rooms are known yet. */
   rooms: number[] | null;
   /** Rooms with numbers, listed on each room line when given. */
@@ -57,10 +67,12 @@ interface MessageParts {
 }
 
 /** One message in the team's format. Null when the group has no nights. */
-export function roomMessage({ groupId, tourNo, leader, pax, city, nights, rooms, numberedRooms = [] }: MessageParts): HotelMessage | null {
+export function roomMessage({ groupId, tourNo, leader, pax, city, nights, departure, rooms, numberedRooms = [] }: MessageParts): HotelMessage | null {
   if (!nights.length) return null;
   const from = nights[0];
-  const to = addDays(nights[nights.length - 1], 1);
+  const last = nights[nights.length - 1];
+  // The night count includes a booked departure day; the dates show the real departure.
+  const to = departure && departure > from && departure <= addDays(last, 1) ? departure : addDays(last, 1);
   const lines = [
     `Tour id -${tourNo}`,
     `GL -  ${(leader || '').toUpperCase()}`.trimEnd(),
@@ -91,8 +103,8 @@ export function roomMessage({ groupId, tourNo, leader, pax, city, nights, rooms,
 
 /**
  * The message for one group, from its plan: the nights it sleeps in Najaf
- * (the departure day included when that rule applies) and its rooms (the
- * Ruya rooms it was given, else the rooms typed for it).
+ * (the departure day included when that rule applies), its actual departure
+ * date and its rooms (the Ruya rooms it was given, else the rooms typed for it).
  */
 export function hotelMessage(group: Group, placement: Placement, { roomNumbers = false }: { roomNumbers?: boolean } = {}): HotelMessage | null {
   const rooms = placement.rooms.length ? placement.rooms.map((r) => r.beds) : placement.spec?.length ? placement.spec : null;
@@ -103,6 +115,7 @@ export function hotelMessage(group: Group, placement: Placement, { roomNumbers =
     pax: group.pax,
     city: 'NAJAF',
     nights: placement.nights,
+    departure: group.checkOut,
     rooms,
     numberedRooms: roomNumbers ? placement.rooms : [],
   });
@@ -114,5 +127,5 @@ export function hotelMessage(group: Group, placement: Placement, { roomNumbers =
  * confirmed" when none are typed.
  */
 export function karbalaMessage(group: Group, nights: string[], rooms: number[] | null): HotelMessage | null {
-  return roomMessage({ groupId: group.id, tourNo: group.tourNo, leader: group.leader, pax: group.pax, city: 'KARBALA', nights, rooms: rooms?.length ? rooms : null });
+  return roomMessage({ groupId: group.id, tourNo: group.tourNo, leader: group.leader, pax: group.pax, city: 'KARBALA', nights, departure: group.checkOut, rooms: rooms?.length ? rooms : null });
 }
