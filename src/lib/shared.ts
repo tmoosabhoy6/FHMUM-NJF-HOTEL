@@ -1,11 +1,14 @@
 import type { Group } from '../../shared/types';
 import { editInput, inputKey, type InputChange, type TourInputs } from './inputs';
 
-export type SharedKey = 'dataset' | 'inputs' | 'prefs' | 'range' | 'karbalaDataset' | 'karbalaInputs' | 'karbalaRange';
+export type SharedKey = 'dataset' | 'inputs' | 'prefs' | 'range' | 'karbalaDataset' | 'karbalaInputs' | 'karbalaRange' | 'seenAlerts' | 'monitor';
 export type SaveStatus = 'saved' | 'saving' | 'offline';
 export type Values = Partial<Record<SharedKey, unknown>>;
 type InputKey = 'inputs' | 'karbalaInputs';
-type Write = { key: SharedKey; value: unknown } | { key: InputKey; tour: string; legacyKey: string | null; changes: InputChange };
+type Write =
+  | { key: SharedKey; value: unknown }
+  | { key: InputKey; tour: string; legacyKey: string | null; changes: InputChange }
+  | { key: 'seenAlerts'; fields: Record<string, string | null> };
 
 const OUTBOX = 'fh.shared-outbox.v1';
 function readOutbox(): Write[] {
@@ -74,6 +77,21 @@ export class SharedState {
     this.schedule();
   }
 
+  /** Merges a few fields into a shared map (seenAlerts) without replacing the rest. */
+  patch(key: 'seenAlerts', fields: Record<string, string | null>) {
+    const queued = this.outbox.find((write) => write !== this.active && write.key === key && 'fields' in write);
+    if (queued && 'fields' in queued) Object.assign(queued.fields, fields);
+    else this.outbox.push({ key, fields: { ...fields } });
+    this.schedule();
+  }
+
+  /** A shared map with this tab's unsaved field merges applied. */
+  withPendingFields<T extends Record<string, unknown>>(key: 'seenAlerts', server: T): T {
+    const merged: Record<string, unknown> = { ...server };
+    for (const write of this.outbox) if (write.key === key && 'fields' in write) Object.assign(merged, write.fields);
+    return merged as T;
+  }
+
   pending(key: SharedKey) {
     return this.outbox.some((write) => write.key === key);
   }
@@ -82,7 +100,7 @@ export class SharedState {
     let inputs = server;
     for (const write of this.outbox) {
       if (write.key !== key) continue;
-      inputs = 'tour' in write ? editInput(inputs, write.tour, write.legacyKey, write.changes) : write.value as TourInputs;
+      inputs = 'tour' in write ? editInput(inputs, write.tour, write.legacyKey, write.changes) : 'value' in write ? write.value as TourInputs : inputs;
     }
     return inputs;
   }
@@ -113,10 +131,10 @@ export class SharedState {
     while (this.outbox.length) {
       const write = this.active = this.outbox[0];
       const path = 'tour' in write ? `${write.key}/${write.tour}` : write.key;
-      const value = 'tour' in write ? { legacyKey: write.legacyKey, changes: write.changes } : write.value;
+      const value = 'tour' in write ? { legacyKey: write.legacyKey, changes: write.changes } : 'fields' in write ? write.fields : write.value;
       try {
         const res = await fetch(`/api/state/${path}`, {
-          method: 'tour' in write ? 'PATCH' : 'PUT',
+          method: 'tour' in write || 'fields' in write ? 'PATCH' : 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(value),
           keepalive,

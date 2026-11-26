@@ -16,7 +16,7 @@
  * every tour arriving by that day has been counted.
  */
 import { NkerpError } from './client.mjs';
-import { addDays, countGuests, countsFromTour, datedRoute, daysBetween, isApprovedTour, isLiveTour, pendingTour, sameOffice, staysFromGroupRow, tripDate, venueOf, withGuests } from './normalize.mjs';
+import { addDays, countGuests, countsFromTour, datedRoute, flightsOf, isApprovedTour, isLiveTour, pendingTour, sameOffice, statusOf, staysFromGroupRow, tripDate, venueOf, withGuests } from './normalize.mjs';
 
 export const DEFAULT_OFFICE = 'Fayz E Husayni Trust Mumbai';
 const LOOKBACK_DAYS = 45; // a tour that started this long before the range can still be in Najaf
@@ -119,9 +119,14 @@ export async function runSync({
   const observations = {};
   const counts = new Map();
   const trackedIds = new Set(tracked.map((t) => t.tourId));
-  const observe = (id, ref, route) => {
-    observations[id] = { tourNo: String(ref ?? id).split('/').pop(), route };
+  // What each tour looks like now, compared with the last pull to report
+  // changes: itinerary, status, flights and guest counts. A fact this pull did
+  // not read stays undefined, so it is not mistaken for a change.
+  const observe = (id, ref, facts) => {
+    const entry = (observations[id] ??= { tourNo: String(ref ?? id).split('/').pop() });
+    for (const [field, value] of Object.entries(facts)) if (value !== undefined && value !== null) entry[field] = value;
   };
+  const guestFacts = (guests) => ({ hotelPax: guests.notRequired, housed: guests.required, infants: guests.fromTour ? undefined : guests.infants });
   const readPlan = async (id) => {
     if (!tourPlans.has(id)) {
       const data = await client.read(`api/tours/getTourSubVenue/${Number(id)}`, undefined, { signal });
@@ -148,19 +153,29 @@ export async function runSync({
   const pending = [];
   for (const [id, row] of byId) {
     if (isApprovedTour(row)) {
-      if (Array.isArray(row.lstSubVenuePlan)) observe(id, row.ReferenceNo, datedRoute(row));
+      observe(id, row.ReferenceNo, {
+        route: Array.isArray(row.lstSubVenuePlan) ? datedRoute(row) : undefined,
+        status: statusOf(row),
+        flights: flightsOf(row.lstTransportItinerary),
+      });
       for (const w of windows) w.stays.push(...staysFromGroupRow(row, w.venue).filter(w.overlaps));
     } else if (isLiveTour(row)) {
       const start = tripDate(row.StartDateTimeZone, row.StartDate);
       const end = tripDate(row.EndDateTimeZone, row.EndDate);
       const within = windows.filter((w) => (!start || start <= w.horizon) && (!end || end >= w.from));
       if (within.length || trackedIds.has(id)) pending.push({ id, row, within });
+    } else if (trackedIds.has(id)) {
+      observe(id, row.ReferenceNo, { status: statusOf(row) });
     }
   }
   if (pending.length) step('tours', 'active', `Reading ${pending.length} pending tours`);
   await pool(pending, POOL, async ({ id, row, within }) => {
     const detail = await readPlan(id);
-    if (Array.isArray(detail?.TourSubvenuePlan)) observe(id, row.ReferenceNo, datedRoute(row, detail));
+    observe(id, row.ReferenceNo, {
+      route: Array.isArray(detail?.TourSubvenuePlan) ? datedRoute(row, detail) : undefined,
+      status: statusOf(row, detail),
+      flights: flightsOf(row.lstTransportItinerary?.length ? row.lstTransportItinerary : detail?.TransportItinerary),
+    });
     for (const w of within) w.pending.push(pendingTour(row, detail, w.venue));
   });
 
@@ -169,7 +184,7 @@ export async function runSync({
   const missing = tracked.filter((t) => !byId.has(t.tourId) && windows.some((w) => w.venue === t.venue && w.overlaps(t)));
   await pool([...new Map(missing.map((t) => [t.tourId, t])).values()], POOL, async (t) => {
     const detail = await readPlan(t.tourId);
-    if (Array.isArray(detail?.TourSubvenuePlan)) observe(t.tourId, detail.ReferenceNo || t.tourNo, datedRoute(null, detail));
+    if (Array.isArray(detail?.TourSubvenuePlan)) observe(t.tourId, detail.ReferenceNo || t.tourNo, { route: datedRoute(null, detail) });
   });
 
   const primaryIds = new Set(primary.stays.map((s) => Number(s.tourId)));
@@ -205,6 +220,7 @@ export async function runSync({
       if (detail) guests = countsFromTour(detail);
     }
     counts.set(id, guests);
+    observe(id, byId.get(id)?.ReferenceNo, guestFacts(guests));
     if (primaryIds.has(id)) counted.push(...primary.stays.filter((s) => Number(s.tourId) === id).map((s) => withGuests(s, guests)));
     const selfHoused = counted.filter((s) => s.pax > 0);
     emit('tours', { approved: primary.stays.length, selfHoused: selfHoused.length, guests: selfHoused.reduce((n, s) => n + s.pax, 0) });
@@ -220,7 +236,7 @@ export async function runSync({
   const pendingCounts = new Map();
   const pendingTours = pending.filter(({ within }) => within.length);
   step('match', 'active', pendingTours.length ? 'Checking hotel pax on pending tours' : 'Building the stays');
-  await pool(pendingTours, POOL, async ({ id }) => {
+  await pool(pendingTours, POOL, async ({ id, row }) => {
     try {
       const applicants = await readGuests(client, id, signal);
       if (applicants.length) pendingCounts.set(id, countGuests(applicants));
@@ -228,6 +244,9 @@ export async function runSync({
       if (signal?.aborted || !(error instanceof NkerpError)) throw error;
       // Drafts may only expose the tour totals.
     }
+    const guests = pendingCounts.get(id);
+    const tour = guests ? null : pendingTour(row, tourPlans.get(id));
+    observe(id, row.ReferenceNo, guests ? guestFacts(guests) : { hotelPax: tour.needHotel, housed: tour.housed });
   });
 
   const fetchedAt = new Date().toISOString();

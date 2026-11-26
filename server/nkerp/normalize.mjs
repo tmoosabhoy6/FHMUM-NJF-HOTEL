@@ -318,3 +318,33 @@ export function withGuests(stay, counts) {
     notes,
   };
 }
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/** "2026-12-03" → "3 Dec". */
+export const shortDate = (date) => `${Number(date.slice(8, 10))} ${MONTHS[Number(date.slice(5, 7)) - 1]}`;
+
+/**
+ * The tour's flights in and out, as one line for change alerts:
+ * "in FZ 123, 3 Dec 11:00 · out IA 441, 11 Dec 09:00". Null when NKERP has none.
+ */
+export function flightsOf(itineraries) {
+  const list = (itineraries ?? []).filter((it) => it && it.IsActive !== false);
+  if (!list.length) return undefined;
+  const it = list.reduce((a, b) => ((b.Id ?? 0) > (a.Id ?? 0) ? b : a));
+  const leg = (word, code, stamp) => {
+    const flight = clean(code);
+    const date = dateOf(stamp);
+    if (!flight && !date) return null;
+    const time = typeof stamp === 'string' ? stamp.slice(11, 16) : '';
+    return `${word} ${flight || 'no flight'}${date ? `, ${shortDate(date)}${/^\d\d:\d\d$/.test(time) ? ` ${time}` : ''}` : ''}`;
+  };
+  const legs = [leg('in', it.ArrivalTransportCode, it.ArrivalDateTimeZone), leg('out', it.DepartureTransportCode, it.DepartureDateTimeZone)].filter(Boolean);
+  return legs.length ? legs.join(' · ') : undefined;
+}
+
+/** The tour's place in NKERP, coarse enough that Approved → Current → Completed is not a change. */
+export function statusOf(row, tourPlan) {
+  if (isApprovedTour(row)) return 'Approved';
+  if (!isLiveTour(row)) return /REJECT/.test(upper(row?.Status)) ? 'Rejected' : 'Cancelled';
+  return tourPlan?.IsReApproval ? 'Awaiting re-approval' : 'Pending approval';
+}

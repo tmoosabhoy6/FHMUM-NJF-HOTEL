@@ -2456,3 +2456,49 @@ a.btn {
     position: static;
   }
 }
+
+/* ---- tour change alerts (TourChanges.tsx) ---- */
+.tour-alerts {
+  margin: 0 0 18px;
+  padding: 12px 16px;
+  border: 1px solid #c2410c;
+  border-left-width: 5px;
+  border-radius: 8px;
+  background: #fff1e8;
+  color: #5a1f05;
+  animation: highlight-alert 1.4s ease-out;
+}
+.tour-alerts-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.tour-alerts h2 { margin: 0; font-size: 1.05rem; }
+.tour-alerts p { margin: 4px 0 8px; }
+.tour-alerts ul { margin: 0; padding: 0; list-style: none; }
+.tour-alerts li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; padding: 6px 0; border-top: 1px solid #f3c9ad; }
+.tour-alerts li small { color: #8a4a26; }
+.tour-alerts .linkish { margin-left: auto; font-size: .8rem; }
+@keyframes highlight-alert { from { background: #ffc9a3; } }
+@media (prefers-reduced-motion: reduce) { .tour-alerts { animation: none; } }
+
+.tour-alert {
+  display: flex;
+  flex-direction: column;
+  width: fit-content;
+  margin-top: 4px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: #c2410c;
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: left;
+}
+.tour-alert { max-width: 240px; overflow-wrap: anywhere; }
+.tour-alert b { font-weight: 700; }
+.tour-alert .linkish { color: #fff; font-size: .7rem; text-decoration: underline; text-align: left; }
+
+.sheet tr[data-changed='true'] > * { background: #ffe7d6; }
+.sheet tr[data-changed='true'] th.tour { box-shadow: inset 4px 0 0 #c2410c; }
+
+.monitor-line { margin: 6px 0 14px; color: var(--ink-2); font-size: .78rem; }
+.monitor-line[data-ok='false'] { color: #962d21; }
+.tour-alerts .monitor-line { margin-bottom: 0; }

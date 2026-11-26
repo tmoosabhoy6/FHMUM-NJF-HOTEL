@@ -7,6 +7,8 @@ import { createServer } from 'node:http';
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CHECK_MINUTES, endLease, scheduledCheck, sendAlerts, startLease } from './alerts.mjs';
+import { emailConfigured } from './gmail.mjs';
 import { NkerpError, sharedClient } from './nkerp/client.mjs';
 import { DEFAULT_OFFICE } from './nkerp/sync.mjs';
 import { refreshFromNkerp, validPullRange } from './pull.mjs';
@@ -56,7 +58,11 @@ async function handleSync(req, res, url) {
   };
   const beat = setInterval(() => !res.writableEnded && res.write(': keep-alive\n\n'), 15_000);
   try {
-    const result = await refreshFromNkerp({ store, client: sharedClient(), from, to, venue, office: OFFICE, emit, signal: abort.signal });
+    await startLease(store);
+    const result = await refreshFromNkerp({
+      store, client: sharedClient(), from, to, venue, office: OFFICE, emit, signal: abort.signal,
+      onAlerts: (alerts) => sendAlerts({ store, env: process.env, alerts }),
+    });
     emit('done', result);
   } catch (error) {
     if (!abort.signal.aborted) {
@@ -68,6 +74,7 @@ async function handleSync(req, res, url) {
       });
     }
   } finally {
+    await endLease(store).catch(() => {});
     clearInterval(beat);
     res.end();
   }
@@ -89,7 +96,7 @@ async function handleApi(req, res, url) {
   if (url.pathname === '/api/state' || url.pathname.startsWith('/api/state/')) return handleStateApi(req, res, url);
   if (req.method !== 'GET') return json(res, 405, { error: 'Read-only API' });
   if (url.pathname === '/api/health') {
-    return json(res, 200, { ok: true, nkerp: sharedClient().configured, office: OFFICE });
+    return json(res, 200, { ok: true, nkerp: sharedClient().configured, email: emailConfigured(process.env), office: OFFICE });
   }
   if (url.pathname === '/api/sync') return handleSync(req, res, url);
   return json(res, 404, { error: 'Not found' });
@@ -127,6 +134,11 @@ const server = createServer(async (req, res) => {
     else res.end();
   }
 });
+
+// The Worker's scheduled check, on request locally (AUTO_CHECK=1).
+if (process.env.AUTO_CHECK === '1' && sharedClient().configured) {
+  setInterval(() => void scheduledCheck({ store, client: sharedClient(), env: process.env, office: OFFICE }), CHECK_MINUTES * 60_000);
+}
 
 server.listen(PORT, () => {
   const mode = DEV ? 'dev' : 'production';

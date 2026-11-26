@@ -6,7 +6,7 @@ import { buildPlan } from '../../shared/engine';
 import type { HotelNames, PendingTour, PullMeta, Settings } from '../../shared/types';
 import { PendingTours } from '../components/PendingTours';
 import type { SaveStatus } from '../lib/shared';
-import { PullChanges, ReapprovalBadge } from '../components/TourChanges';
+import { PullChanges, ReapprovalBadge, TourAlerts } from '../components/TourChanges';
 import { Brand } from '../components/ui';
 import { copy } from '../lib/copy';
 import { tourInput, withHotelPax, type InputChange, type TourInputs } from '../lib/inputs';
@@ -229,6 +229,7 @@ function Planner({ dataset, inputs, settings }: { dataset: PullResult; inputs: T
             <div><dt>Tours to review</dt><dd>{plan.heldTours}</dd></div>
           </dl>
           {plan.limited && <p className="approval-notice">Showing the best feasible plan found within the search limit.</p>}
+          <TourAlerts meta={meta} />
           <PullChanges meta={meta} />
           <section className="block">
             <div className="block-head approval-block-head">

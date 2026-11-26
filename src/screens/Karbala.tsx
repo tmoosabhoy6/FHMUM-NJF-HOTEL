@@ -3,8 +3,8 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { dayLabel, dayMonth, fullDate, rangeLabel } from '../../shared/dates';
 import { karbalaRows, type KarbalaRow } from '../../shared/karbala';
 import { describeRooms, parseRoomSpec } from '../../shared/roomSpec';
-import type { DateChange } from '../../shared/types';
-import { PaxInput, PullChanges, ReapprovalBadge } from '../components/TourChanges';
+import type { DateChange, PullMeta } from '../../shared/types';
+import { ChangeBadge, PaxInput, PullChanges, ReapprovalBadge, TourAlerts, useChanged } from '../components/TourChanges';
 import { PendingTours } from '../components/PendingTours';
 import { Brand, groupsText, guests, Num } from '../components/ui';
 import { howText } from '../lib/bookings';
@@ -132,9 +132,10 @@ function RoomsInput({ row, spec, onInput }: { row: KarbalaRow; spec: string; onI
   );
 }
 
-function GroupsTable({ rows, inputs, onInput, changes }: {
-  rows: KarbalaRow[]; inputs: Karbala['inputs']; onInput: Karbala['onInput']; changes?: Record<number, DateChange>;
+function GroupsTable({ rows, meta, inputs, onInput, changes }: {
+  rows: KarbalaRow[]; meta: PullMeta; inputs: Karbala['inputs']; onInput: Karbala['onInput']; changes?: Record<number, DateChange>;
 }) {
+  const changed = useChanged(meta);
   return (
     <div className="sheet-wrap">
       <table className="sheet groups">
@@ -157,10 +158,11 @@ function GroupsTable({ rows, inputs, onInput, changes }: {
           {rows.map((row) => {
             const { group } = row;
             return (
-              <tr key={group.id}>
+              <tr key={group.id} data-changed={changed(group.tourId)}>
                 <th scope="row" className="tour">
                   {group.tourNo}
                   <ReapprovalBadge change={changes?.[group.tourId]} />
+                  <ChangeBadge tourId={group.tourId} meta={meta} />
                 </th>
                 <td className="leader">{group.leader || '–'}</td>
                 <td className="n strong">
@@ -314,6 +316,7 @@ export function KarbalaView({ k, tabs, server, departureDayRule, saveStatus, loa
 
         {dataset && meta && !k.pulling ? (
           <>
+            <TourAlerts meta={meta} />
             <PullChanges meta={meta} />
             <section className="overview k-overview">
               <div className="overview-head">
@@ -345,7 +348,7 @@ export function KarbalaView({ k, tabs, server, departureDayRule, saveStatus, loa
                       Use 2x6 for six 2-bed rooms.
                     </p>
                   </div>
-                  <GroupsTable rows={rows} inputs={inputs} onInput={k.onInput} changes={meta.reapprovals} />
+                  <GroupsTable rows={rows} meta={meta} inputs={inputs} onInput={k.onInput} changes={meta.reapprovals} />
                 </section>
 
                 <section className="block" id="k-messages">

@@ -80,6 +80,52 @@ Build): every push to `main` builds with `npm run build` and deploys with
    all" per date. Two types: requirements only, or with the planned room
    numbers on each room line (`- Room no. 106, 107`). "Download Excel" exports the plan; its "Bookings to make" sheet has one row per tour per hotel (first and last night, nights, guests, arrival and departure flight or subvenue).
 
+## Tour change alerts
+
+Every 15 minutes the Worker's cron (`triggers.crons` in `wrangler.jsonc`)
+pulls NKERP again for the saved Najaf and Karbala ranges, exactly like
+**Pull again**, so the plan stays current without anyone opening the app.
+Each pull, automatic or by hand, compares every tour ID with the previous pull
+(`server/pull.mjs`) and reports:
+
+- **Hotel pax** (guests marked "accommodation not required") and **Faiz
+  accommodation** (guests NKERP houses), e.g. 4 guests moving to Faiz
+  accommodation: hotel pax 42 → 38, Faiz accommodation 10 → 14
+- **Infants** in the hotel, **dates** (Najaf/Karbala stays), **flights** in
+  and out, and **status** (approved, pending, awaiting re-approval, cancelled)
+
+Only tours with guests in a hotel before or after the change are reported.
+The plan already uses the new data. In the app, changed rows are coloured and
+listed at the top of the Najaf, Karbala and Approvals pages until someone
+clicks **Mark seen** (shared for everyone, cleared after 14 days). An email
+goes out at once, e.g. "Tour 2696: hotel pax changed from 42 to 38", one
+email per check listing every change. If Gmail fails, the changes wait and go
+with the next check. "Hotels and rooms" shows the last check and email.
+
+A staff pull that is running makes the check skip that turn. Code:
+`server/alerts.mjs` (check, email text), `server/gmail.mjs` (Gmail API),
+`src/components/TourChanges.tsx` (banner, badges).
+
+### Turning on the emails (once)
+
+The Worker sends through the Gmail API as your Gmail account, with the
+`gmail.send` permission only (it cannot read mail).
+
+1. In <https://console.cloud.google.com/>: create a project, enable the
+   **Gmail API**, set up the OAuth consent screen (External, add yourself as a
+   test user) and **publish it** ("In production"). Unpublished apps get
+   sign-ins that expire after 7 days. Then create an OAuth client of type
+   **Desktop app**.
+2. On your computer, in this repo: `npm install`, `npx wrangler login`, then
+   `npm run gmail:setup`. Paste the client ID and secret, allow access in the
+   browser, and enter the address(es) that should get the alerts. It sends a
+   test email and saves `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`,
+   `GMAIL_REFRESH_TOKEN` and `ALERT_EMAIL_TO` as Worker secrets.
+
+Without these secrets the check still runs and highlights changes in the app.
+To change how often it runs, edit the cron and `CHECK_MINUTES` in
+`server/alerts.mjs`. Locally, `AUTO_CHECK=1` in `.env` runs the same check.
+
 ## Karbala Hotel Messages tab
 
 A message generator only: no hotels and no room plan. Pull Karbala from NKERP
@@ -160,4 +206,4 @@ Read-only, on the account's scheduling role. `server/nkerp/client.mjs` can
 only call General search → Groups (POST), a tour's guest list
 (`GET api/tours/getApplicants/{id}`) and a tour's sub-venue plans
 (`GET api/tours/getTourSubVenue/{id}`); there is no save, release or email
-call in the code.
+call in the code. The scheduled check uses the same read-only calls.

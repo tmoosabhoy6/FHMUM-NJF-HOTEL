@@ -3,10 +3,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { OPENING_BALANCE, PLANNING_START, RUYA_WITHHELD, ruyaRooms } from '../shared/config';
 import { dayMonth, fullDate } from '../shared/dates';
 import { buildPlan, hotelNames } from '../shared/engine';
-import type { Group, Settings } from '../shared/types';
+import type { Group, MonitorState, Settings } from '../shared/types';
 import { HotelMessages } from './components/HotelMessages';
 import { SettingsDrawer, type Prefs } from './components/SettingsDrawer';
 import { Brand, CityTabs, type PlannerTab } from './components/ui';
+import { AlertsContext, type Alerts, type SeenAlerts } from './lib/alerts';
 import { exportPlan } from './lib/export';
 import { editInput, inputKey, legacyKey, tourInput, withHotelPax, type InputChange, type TourInputs } from './lib/inputs';
 import { useKarbala } from './lib/karbala';
@@ -57,6 +58,8 @@ export function App() {
   const [shared] = useState(() => new SharedState());
   const [loaded, setLoaded] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved');
+  const [seen, setSeen] = useState<SeenAlerts>({});
+  const [monitor, setMonitor] = useState<MonitorState | null>(null);
   const [tab, setTab] = useState<PlannerTab>(() => {
     const saved = load<string>(KEY.tab, 'najaf');
     return saved === 'approvals' || saved === 'karbala' ? saved : 'najaf';
@@ -93,6 +96,8 @@ export function App() {
       if ('inputs' in values || first) setTyped(shared.withPending('inputs', (values.inputs ?? {}) as TourInputs));
       if ('prefs' in values && !shared.pending('prefs')) setPrefs({ ...DEFAULT_PREFS, ...values.prefs as Partial<Prefs> });
       if (values.range && !shared.pending('range')) setRange(values.range as typeof range);
+      if ('seenAlerts' in values) setSeen(shared.withPendingFields('seenAlerts', (values.seenAlerts ?? {}) as SeenAlerts));
+      if ('monitor' in values) setMonitor((values.monitor ?? null) as MonitorState | null);
       karbalaApply.current(values, first);
       first = false;
       setLoaded(true);
@@ -202,6 +207,16 @@ export function App() {
     }
   };
 
+  const alerts = useMemo<Alerts>(() => ({
+    seen,
+    monitor,
+    markSeen: (tours) => {
+      const fields = Object.fromEntries(tours.map(({ tourId, at }) => [String(tourId), at]));
+      setSeen((all) => ({ ...all, ...fields }));
+      shared.patch('seenAlerts', fields);
+    },
+  }), [seen, monitor, shared]);
+
   const names = settings.names ?? hotelNames();
   const night = screen !== 'app';
   const flagged = plan?.totals.flagged ?? 0;
@@ -222,15 +237,15 @@ export function App() {
 
   if (tab === 'karbala') {
     return (
-      <NamesContext.Provider value={names}>
+      <AlertsContext.Provider value={alerts}><NamesContext.Provider value={names}>
         <KarbalaView k={karbala} tabs={tabs()} server={server} departureDayRule={prefs.departureDayRule} saveStatus={saveStatus} loaded={loaded} ago={ago} />
-      </NamesContext.Provider>
+      </NamesContext.Provider></AlertsContext.Provider>
     );
   }
 
   if (tab === 'approvals') {
     return (
-      <NamesContext.Provider value={names}>
+      <AlertsContext.Provider value={alerts}><NamesContext.Provider value={names}>
         <ApprovalsView
           tabs={tabs()}
           dataset={savedDataset}
@@ -245,12 +260,12 @@ export function App() {
             openPull();
           }}
         />
-      </NamesContext.Provider>
+      </NamesContext.Provider></AlertsContext.Provider>
     );
   }
 
   return (
-    <NamesContext.Provider value={names}>
+    <AlertsContext.Provider value={alerts}><NamesContext.Provider value={names}>
       {dataset && plan ? (
         <div className="app" aria-hidden={night}>
           <header className="app-top">
@@ -359,6 +374,6 @@ export function App() {
           />
         ) : null}
       </AnimatePresence>
-    </NamesContext.Provider>
+    </NamesContext.Provider></AlertsContext.Provider>
   );
 }

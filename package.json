@@ -11,7 +11,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "deploy": "npm run build && wrangler deploy",
-    "cf:dev": "npm run build && wrangler dev"
+    "cf:dev": "npm run build && wrangler dev",
+    "gmail:setup": "node --env-file-if-exists=.env scripts/gmail-setup.mjs"
   },
   "engines": {
     "node": ">=22.9"

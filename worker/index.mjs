@@ -5,9 +5,16 @@
  *   GET /api/sync?from&to&venue  the pull (venue najaf or karbala), streamed to the loading screen as server-sent events
  *   /api/state             the app's shared saved state, in D1 (server/state.mjs)
  *
+ * scheduled (cron, wrangler.jsonc): pulls NKERP again for the saved ranges and
+ * emails any tour changes (server/alerts.mjs).
+ *
  * The NKERP login comes from the Worker's secrets NKERP_LOGIN_ID and
- * NKERP_PASSWORD. The app itself has no login: anyone with the link can use it.
+ * NKERP_PASSWORD; Gmail alerts from GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET,
+ * GMAIL_REFRESH_TOKEN and ALERT_EMAIL_TO (server/gmail.mjs). The app itself
+ * has no login: anyone with the link can use it.
  */
+import { endLease, scheduledCheck, sendAlerts, startLease } from '../server/alerts.mjs';
+import { emailConfigured } from '../server/gmail.mjs';
 import { NkerpClient, NkerpError } from '../server/nkerp/client.mjs';
 import { DEFAULT_OFFICE } from '../server/nkerp/sync.mjs';
 import { refreshFromNkerp, validPullRange } from '../server/pull.mjs';
@@ -16,6 +23,8 @@ import { FILES } from './assets.generated.mjs';
 
 const json = (status, body) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
+
+const nkerp = (env) => new NkerpClient({ loginId: env.NKERP_LOGIN_ID, password: env.NKERP_PASSWORD, baseUrl: env.NKERP_BASE_URL });
 
 function sync(url, env, ctx) {
   const from = url.searchParams.get('from') ?? '';
@@ -42,17 +51,20 @@ function sync(url, env, ctx) {
   const emit = (event, data) => send(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   const beat = setInterval(() => send(': keep-alive\n\n'), 15_000);
 
+  const store = d1Store(env.DB);
   const work = (async () => {
     try {
+      await startLease(store).catch(() => {});
       const result = await refreshFromNkerp({
-        store: d1Store(env.DB),
-        client: new NkerpClient({ loginId: env.NKERP_LOGIN_ID, password: env.NKERP_PASSWORD, baseUrl: env.NKERP_BASE_URL }),
+        store,
+        client: nkerp(env),
         from,
         to,
         venue,
         office: env.NKERP_OFFICE_NAME || DEFAULT_OFFICE,
         emit,
         signal: abort.signal,
+        onAlerts: (alerts) => sendAlerts({ store, env, alerts }),
       });
       emit('done', result);
     } catch (error) {
@@ -65,6 +77,7 @@ function sync(url, env, ctx) {
         });
       }
     } finally {
+      await endLease(store).catch(() => {});
       clearInterval(beat);
       open = false;
       await writer.close().catch(() => {});
@@ -110,12 +123,18 @@ export default {
     }
     if (request.method !== 'GET') return json(405, { error: 'Read-only API' });
     if (url.pathname === '/api/health') {
-      return json(200, { ok: true, nkerp: Boolean(env.NKERP_LOGIN_ID && env.NKERP_PASSWORD), office: env.NKERP_OFFICE_NAME || DEFAULT_OFFICE });
+      return json(200, { ok: true, nkerp: Boolean(env.NKERP_LOGIN_ID && env.NKERP_PASSWORD), email: emailConfigured(env), office: env.NKERP_OFFICE_NAME || DEFAULT_OFFICE });
     }
     if (url.pathname === '/api/sync') {
       if (!env.DB) return json(503, { error: 'Shared storage is not set up' });
       return sync(url, env, ctx);
     }
     return json(404, { error: 'Not found' });
+  },
+
+  /** The automatic check (cron in wrangler.jsonc). */
+  async scheduled(controller, env, ctx) {
+    if (!env.DB || !env.NKERP_LOGIN_ID || !env.NKERP_PASSWORD) return;
+    ctx.waitUntil(scheduledCheck({ store: d1Store(env.DB), client: nkerp(env), env, office: env.NKERP_OFFICE_NAME || DEFAULT_OFFICE }));
   },
 };

@@ -4,6 +4,8 @@ import { OPENING_BALANCE, RUYA_SHEET, RUYA_WITHHELD } from '../../shared/config'
 import { dayMonth } from '../../shared/dates';
 import { DEFAULT_HOTEL_NAMES, HOTEL_ORDER, hotelNames } from '../../shared/engine';
 import type { HotelNames } from '../../shared/types';
+import { useAlerts } from '../lib/alerts';
+import { MonitorLine } from './TourChanges';
 
 /** What a person can change, saved on this device. */
 export interface Prefs {
@@ -175,8 +177,26 @@ export function SettingsDrawer({ prefs, beds, onChange, onClose, onClearInputs, 
               </button>
             </div>
           </section>
+
+          <ChangeAlerts />
         </div>
       </motion.aside>
     </>
+  );
+}
+
+function ChangeAlerts() {
+  const { monitor } = useAlerts();
+  return (
+    <section className="set">
+      <h3>Tour change alerts</h3>
+      <p>
+        Every {monitor?.every ?? 15} minutes the server pulls NKERP again for the saved Najaf and Karbala ranges. When a tour&rsquo;s hotel pax, Faiz
+        accommodation, dates, flights or status change, the plan updates, the row is highlighted until someone marks it seen, and an email goes out.
+      </p>
+      {monitor?.check ? <MonitorLine /> : <p>No automatic check has run yet.</p>}
+      {monitor?.email?.ok ? <p>Last alert email: {new Date(monitor.email.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}.</p> : null}
+      {monitor && !monitor.emailOn ? <p>To turn on emails, run <code>npm run gmail:setup</code> once (see the README).</p> : null}
+    </section>
   );
 }

@@ -1,7 +1,8 @@
 {
   // Cloudflare Worker that serves the app and the read-only NKERP API.
   // `npm run build` bundles dist/ into the Worker (worker/assets.generated.mjs).
-  // Secrets (set once, kept across deploys): NKERP_LOGIN_ID, NKERP_PASSWORD
+  // Secrets (set once, kept across deploys): NKERP_LOGIN_ID, NKERP_PASSWORD,
+  // and for change alerts GMAIL_CLIENT_ID, GMAIL_CLIENT_SECRET, GMAIL_REFRESH_TOKEN, ALERT_EMAIL_TO
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "najaf-stays",
   "main": "worker/index.mjs",
@@ -9,6 +10,9 @@
   "workers_dev": true,
   "preview_urls": false,
   "observability": { "enabled": true },
+  // The automatic check: pull NKERP again for the saved ranges and email tour
+  // changes (server/alerts.mjs). Keep CHECK_MINUTES there in step.
+  "triggers": { "crons": ["*/15 * * * *"] },
   // Shared saved state (room requests, hotel choices, last pull, settings): server/state.mjs
   "d1_databases": [{ "binding": "DB", "database_name": "najaf-stays", "database_id": "b9791f63-d8cf-404c-a4af-142ce7ec81c0" }]
 }

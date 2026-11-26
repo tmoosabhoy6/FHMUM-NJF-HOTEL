@@ -7,15 +7,21 @@
  *
  * An NKERP pull commits both city snapshots and the itinerary history at
  * one version. Staff edits use separate keys so a pull cannot replace them.
+ * `monitor` (the automatic check and alert emails) is written by the server
+ * only; `seenAlerts` holds, per tour ID, the last change someone marked seen.
  * D1 backs the Worker, and a JSON file backs the local Node server.
  */
 
-export const STATE_KEYS = new Set(['dataset', 'inputs', 'applied', 'prefs', 'range', 'karbalaDataset', 'karbalaInputs', 'karbalaApplied', 'karbalaRange']);
+export const STATE_KEYS = new Set(['dataset', 'inputs', 'applied', 'prefs', 'range', 'karbalaDataset', 'karbalaInputs', 'karbalaApplied', 'karbalaRange', 'monitor', 'seenAlerts']);
 const PULL_KEYS = ['dataset', 'karbalaDataset', 'pullHistory'];
+const SERVER_KEYS = new Set([...PULL_KEYS, 'monitor']);
+/** Server-only rows, never sent to the browser: the itinerary history, unsent alert emails, the pull lease. */
+const INTERNAL = "('pullHistory', 'alertOutbox', 'pullLease')";
 const TOUR_KEYS = new Set(['inputs', 'karbalaInputs']);
 const TOUR_KEY = /^tour-[1-9]\d{0,11}$/;
 // Older open tabs may still patch entries by display number.
-const PATCH_KEYS = new Set(['inputs', 'applied', 'karbalaInputs', 'karbalaApplied']);
+const PATCH_KEYS = new Set(['inputs', 'applied', 'karbalaInputs', 'karbalaApplied', 'seenAlerts']);
+const STAMP = /^\d{4}-\d{2}-\d{2}T[\d:.]{5,15}Z$/;
 const FIELD = /^[A-Za-z0-9 _.\/-]{1,60}$/;
 const MAX_BODY = 1_500_000;
 
@@ -50,7 +56,7 @@ export async function handleState(request, url, store) {
     return json(200, { version: await store.editTour(key, tour, body.legacyKey, body.changes) });
   }
   if (request.method === 'PUT') {
-    if (PULL_KEYS.includes(key)) return json(405, { error: 'Only an NKERP pull can refresh this data' });
+    if (SERVER_KEYS.has(key)) return json(405, { error: 'Only an NKERP pull can refresh this data' });
     return json(200, { version: await store.put(key, JSON.stringify(body)) });
   }
 
@@ -58,6 +64,9 @@ export async function handleState(request, url, store) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return json(400, { error: 'Send an object' });
   const fields = Object.entries(body);
   if (!fields.length || fields.length > 500 || fields.some(([f]) => !FIELD.test(f))) return json(400, { error: 'Bad fields' });
+  if (key === 'seenAlerts' && fields.some(([f, v]) => !/^\d{1,12}$/.test(f) || (v !== null && !(typeof v === 'string' && STAMP.test(v))))) {
+    return json(400, { error: 'Bad fields' });
+  }
   return json(200, { version: await store.patch(key, fields) });
 }
 
@@ -96,7 +105,7 @@ export function d1Store(db) {
     async list(since) {
       await init();
       const [rows, top] = await db.batch([
-        db.prepare("SELECT key, value, version FROM state WHERE version > ?1 AND key <> 'pullHistory'").bind(since),
+        db.prepare(`SELECT key, value, version FROM state WHERE version > ?1 AND key NOT IN ${INTERNAL}`).bind(since),
         db.prepare('SELECT COALESCE(MAX(version), 0) AS v FROM state'),
       ]);
       return { rows: rows.results, version: top.results[0].v };
@@ -108,6 +117,11 @@ export function d1Store(db) {
         .bind(key, value)
         .first();
       return row.version;
+    },
+    async get(key) {
+      await init();
+      const row = await db.prepare('SELECT value FROM state WHERE key = ?1').bind(key).first();
+      return row ? JSON.parse(row.value) : undefined;
     },
     async readPull() {
       await init();
@@ -184,6 +198,10 @@ export async function fileStore(path) {
     },
     async put(key, value) {
       return write({ [key]: value });
+    },
+    async get(key) {
+      const row = data.keys[key];
+      return row ? JSON.parse(row.value) : undefined;
     },
     async readPull() {
       return readPull();

@@ -1,7 +1,7 @@
 import { motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 import { dayMonth, rangeLabel } from '../../shared/dates';
-import { PaxInput, ReapprovalBadge } from './TourChanges';
+import { ChangeBadge, PaxInput, ReapprovalBadge, useChanged } from './TourChanges';
 import type { PendingTour, PullMeta } from '../../shared/types';
 import { tourInput, type InputChange, type TourInputs } from '../lib/inputs';
 
@@ -18,6 +18,7 @@ interface Props {
 /** Tours NKERP has not approved yet: shown for information, not planned. */
 export function PendingTours({ tours, meta, inputs, onEdit, onClose, city = 'Najaf' }: Props) {
   const [onlyHotel, setOnlyHotel] = useState(false);
+  const changed = useChanged(meta);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -84,10 +85,11 @@ export function PendingTours({ tours, meta, inputs, onEdit, onClose, city = 'Naj
                   const input = tourInput(inputs, t, meta);
                   const pax = input?.pax ?? t.needHotel;
                   return (
-                    <tr key={t.tourId} data-quiet={!pax}>
+                    <tr key={t.tourId} data-quiet={!pax} data-changed={changed(t.tourId)}>
                       <th scope="row" className="tour">
                         {t.tourNo}
                         <ReapprovalBadge change={meta.reapprovals?.[t.tourId]} />
+                        <ChangeBadge tourId={t.tourId} meta={meta} />
                       </th>
                       <td>{t.status}</td>
                       <td>{t.start ? dayMonth(t.start) : '–'}</td>

@@ -47,6 +47,27 @@ export interface DateChange {
   at: string;
 }
 
+/** One fact about a tour that NKERP changed between two pulls. */
+export interface FieldChange {
+  field: 'hotelPax' | 'housed' | 'infants' | 'status' | 'flights' | 'dates';
+  before: string;
+  after: string;
+}
+
+/** Recent changes on one tour ID, oldest first. Each pull that found changes adds an entry. */
+export interface TourAlert {
+  tourNo: string;
+  entries: { at: string; changes: FieldChange[] }[];
+}
+
+/** The automatic check and its emails (server/alerts.mjs). */
+export interface MonitorState {
+  every?: number;
+  emailOn?: boolean;
+  check?: { at: string; ok: boolean; message: string; changed?: number };
+  email?: { at: string; ok: boolean; message?: string; tours?: number; waiting?: number };
+}
+
 export interface PullMeta {
   source: 'nkerp' | 'sample';
   /** The city pulled (absent on pulls made before the Karbala tab: Najaf). */
@@ -72,6 +93,8 @@ export interface PullMeta {
   /** Exact owners of pre-existing room requests saved by display number. */
   legacyInputKeys?: Record<number, string>;
   awaiting?: { tourId: number; tourNo: string }[];
+  /** Tours whose hotel pax, dates, flights or status changed in the last 14 days, by tour ID. */
+  alerts?: Record<number, TourAlert>;
   /** Tours in the range that are not approved yet, with what NKERP says about them. */
   pending?: PendingTour[];
   /** Guest lists read, one per tour. */

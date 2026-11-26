@@ -7,7 +7,7 @@ import { describeRooms, parseRoomSpec } from '../../shared/roomSpec';
 import type { DateChange, DayRow, Group, GroupInput, HotelId, HotelNames, Placement, Plan, PullMeta } from '../../shared/types';
 import { bookingRows, howText, legDetail } from '../lib/bookings';
 import { useNames } from '../lib/names';
-import { PaxInput, PullChanges, ReapprovalBadge } from '../components/TourChanges';
+import { ChangeBadge, PaxInput, PullChanges, ReapprovalBadge, TourAlerts, useChanged } from '../components/TourChanges';
 import type { InputChange, TourInputs } from '../lib/inputs';
 import { PendingTours } from '../components/PendingTours';
 import { RoomPicker } from '../components/RoomPicker';
@@ -359,10 +359,11 @@ function notesFor(group: Group, placement: Placement | undefined, names: HotelNa
   return notes;
 }
 
-function GroupsTable({ list, plan, inputs, onInput, onPick, changes }: {
-  list: Group[]; plan: Plan; inputs: Props['inputs']; onInput: Props['onInput']; onPick: (groupId: string) => void; changes?: Record<number, DateChange>;
+function GroupsTable({ list, plan, meta, inputs, onInput, onPick, changes }: {
+  list: Group[]; plan: Plan; meta: PullMeta; inputs: Props['inputs']; onInput: Props['onInput']; onPick: (groupId: string) => void; changes?: Record<number, DateChange>;
 }) {
   const names = useNames();
+  const changed = useChanged(meta);
   return (
     <div className="sheet-wrap">
       <table className="sheet groups">
@@ -391,10 +392,11 @@ function GroupsTable({ list, plan, inputs, onInput, onPick, changes }: {
             const hotel: HotelId | null = placement?.hotel ?? null;
             const notes = notesFor(group, placement, names);
             return (
-              <tr key={group.id} data-flag={Boolean(placement && (placement.hotel !== 'ruya' || placement.overbooked))}>
+              <tr key={group.id} data-flag={Boolean(placement && (placement.hotel !== 'ruya' || placement.overbooked))} data-changed={changed(group.tourId)}>
                 <th scope="row" className="tour">
                   {group.tourNo}
                   <ReapprovalBadge change={changes?.[group.tourId]} />
+                  <ChangeBadge tourId={group.tourId} meta={meta} />
                 </th>
                 <td className="leader">{group.leader || '–'}</td>
                 <td className="n strong">
@@ -476,6 +478,7 @@ export function PlanView({ groups, plan, meta, inputs, tourInputs, onInput, onOp
 
   return (
     <main className="page">
+      <TourAlerts meta={meta} />
       <PullChanges meta={meta} />
       <section className="overview">
         <div className="overview-head">
@@ -540,7 +543,7 @@ export function PlanView({ groups, plan, meta, inputs, tourInputs, onInput, onOp
           </p>
         </div>
         {editable.length ? (
-          <GroupsTable list={editable} plan={plan} inputs={inputs} onInput={onInput} onPick={setPicking} changes={meta.reapprovals} />
+          <GroupsTable list={editable} plan={plan} meta={meta} inputs={inputs} onInput={onInput} onPick={setPicking} changes={meta.reapprovals} />
         ) : <p className="read-empty">No approved stays in this range.</p>}
       </section>
 
