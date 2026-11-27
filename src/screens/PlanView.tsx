@@ -506,7 +506,7 @@ function GroupsTable({ list, plan, meta, inputs, onInput, onPick, changes }: {
                         }}
                       >
                         {input.roomNos?.length ? <option value="rooms">{names.ruya}, rooms by hand</option> : null}
-                        <option value="">{hotel && !input.roomNos?.length ? names[hotel] : 'Planner decides'}</option>
+                        <option value="">{hotel && !input.roomNos?.length ? names[hotel] : 'Planner picks'}</option>
                         {HOTEL_ORDER.map((h) => (
                           <option key={h} value={h}>
                             Keep in {names[h]}

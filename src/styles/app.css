@@ -17,6 +17,9 @@
   --sunk: oklch(95.6% 0.011 272);
   --line: oklch(90.5% 0.014 272);
   --line-strong: oklch(81% 0.022 272);
+  --control: oklch(63% 0.03 272);
+  --hover: oklch(98.6% 0.005 272);
+  --select: oklch(86% 0.09 272);
   --ink: oklch(23% 0.045 272);
   --ink-2: oklch(42% 0.035 272);
   --ink-3: oklch(51% 0.03 272);
@@ -36,11 +39,18 @@
   --info: var(--rail);
   --info-soft: oklch(95% 0.03 272);
   --info-line: oklch(84% 0.07 272);
+  --info-hover: oklch(93.5% 0.038 272);
+  --ring: oklch(41% 0.19 272 / 0.4);
+  --ring-out: oklch(41% 0.19 272 / 0);
   --bad: oklch(55% 0.2 27);
   --bad-soft: oklch(95.5% 0.03 27);
   --bad-ink: oklch(43% 0.17 27);
   --caution: oklch(62% 0.17 50);
   --ok: oklch(52% 0.14 152);
+  --ok-bright: oklch(80% 0.17 150);
+  --caution-soft: oklch(95% 0.045 60);
+  --caution-ink: oklch(42% 0.11 50);
+  --caution-bright: oklch(88% 0.12 70);
   --scrim: oklch(23% 0.045 272 / 0.4);
   --shadow: oklch(23% 0.045 272 / 0.18);
 
@@ -88,7 +98,7 @@ body {
 }
 
 ::selection {
-  background: oklch(86% 0.09 272);
+  background: var(--select);
   color: var(--ink);
 }
 
@@ -171,7 +181,7 @@ h2,
   gap: 6px;
   height: 34px;
   padding: 0 12px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--control);
   border-radius: var(--r-2);
   background: var(--surface);
   font-size: var(--fs-2);
@@ -184,7 +194,7 @@ h2,
 
 .btn:hover:not(:disabled) {
   background: var(--sunk);
-  border-color: var(--ink-3);
+  border-color: var(--ink-2);
 }
 
 .btn:active:not(:disabled) {
@@ -336,7 +346,7 @@ input[type='search'],
 select {
   height: 34px;
   padding: 0 10px;
-  border: 1px solid var(--line-strong);
+  border: 1px solid var(--control);
   border-radius: var(--r-2);
   background: var(--surface);
   color: var(--ink);
@@ -346,7 +356,7 @@ select {
 
 input:hover,
 select:hover {
-  border-color: var(--ink-3);
+  border-color: var(--ink-2);
 }
 
 input:focus-visible,
@@ -503,8 +513,8 @@ input::placeholder {
 }
 
 .flag[data-tone='sample'] {
-  background: var(--araf-soft);
-  color: var(--araf-ink);
+  background: var(--caution-soft);
+  color: var(--caution-ink);
   white-space: nowrap;
 }
 
@@ -649,7 +659,7 @@ input::placeholder {
   height: 8px;
   margin-right: 6px;
   border-radius: 50%;
-  background: oklch(80% 0.17 150);
+  background: var(--ok-bright);
 }
 
 .status-line[data-state='saving'] i {
@@ -659,7 +669,7 @@ input::placeholder {
 
 .status-line[data-state='offline'] i,
 .status-line[data-state='sample'] i {
-  background: var(--araf);
+  background: var(--caution-bright);
 }
 
 .status-sub {
@@ -667,7 +677,7 @@ input::placeholder {
 }
 
 .status-sub[data-trouble='true'] {
-  color: oklch(88% 0.12 85);
+  color: var(--caution-bright);
   font-weight: 600;
 }
 
@@ -683,8 +693,8 @@ input::placeholder {
   justify-content: center;
   gap: 8px;
   padding: 8px var(--gutter);
-  background: var(--araf-soft);
-  color: var(--araf-ink);
+  background: var(--caution-soft);
+  color: var(--caution-ink);
   font-size: var(--fs-2);
   font-weight: 600;
 }
@@ -789,7 +799,7 @@ input::placeholder {
 }
 
 .lead .hot {
-  color: var(--c-ink);
+  color: var(--bad-ink);
 }
 
 .lead-note {
@@ -1346,7 +1356,7 @@ button.occ-col:hover,
 }
 
 .sheet tbody tr:hover > * {
-  background: oklch(98.6% 0.005 272);
+  background: var(--hover);
 }
 
 .sheet .n {
@@ -1419,7 +1429,7 @@ button.occ-col:hover,
 }
 
 .sheet tr[data-changed='true']:hover > * {
-  background: oklch(93.5% 0.038 272);
+  background: var(--info-hover);
 }
 
 .sheet tr[data-quiet='true'] > * {
@@ -1674,7 +1684,7 @@ button.occ-col:hover,
 .pick {
   display: grid;
   align-content: center;
-  width: 50px;
+  width: 52px;
   height: 46px;
   padding: 0;
   border: 1px solid var(--line-strong);
@@ -1694,7 +1704,7 @@ button.occ-col:hover,
 .room span,
 .room-key span,
 .pick span {
-  font-size: 0.6875rem;
+  font-size: var(--fs-1);
   color: var(--ink-2);
 }
 
@@ -1813,7 +1823,7 @@ button.occ-col:hover,
 }
 
 .c-tour {
-  width: 15%;
+  width: 14%;
 }
 
 .c-pax {
@@ -1829,7 +1839,7 @@ button.occ-col:hover,
 }
 
 .c-hotel {
-  width: 154px;
+  width: 170px;
 }
 
 .c-rooms {
@@ -2311,10 +2321,10 @@ button.sb-bar.lane:hover {
 
 @keyframes ring {
   from {
-    box-shadow: 0 0 0 0 oklch(41% 0.19 272 / 0.4);
+    box-shadow: 0 0 0 0 var(--ring);
   }
   to {
-    box-shadow: 0 0 0 9px oklch(41% 0.19 272 / 0);
+    box-shadow: 0 0 0 9px var(--ring-out);
   }
 }
 
@@ -2652,8 +2662,8 @@ button.sb-bar.lane:hover {
 }
 
 .pick-key .k-soft {
-  border-color: oklch(72% 0.125 248);
-  background: oklch(90.5% 0.08 248);
+  border-color: oklch(72% 0.125 255);
+  background: oklch(90.5% 0.08 255);
 }
 
 .pick-key .k-fixed {

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-27T23:52:35Z",
+  "generatedAt": "2026-11-27T23:53:46Z",
   "title": "Design System: FH-MUM NJF Hotel Accommodation Planner",
   "extensions": {
     "colorMeta": {
@@ -533,7 +533,7 @@
     "typographyMeta": {
       "display": {
         "displayName": "Display",
-        "purpose": "Hotel totals, approval stats, the pull tally and the pull screen heading. Narrow bold."
+        "purpose": "Hotel totals, the pull tally and the pull screen heading. Narrow bold."
       },
       "headline": {
         "displayName": "Headline",
@@ -570,25 +570,26 @@
     },
     "tagHues": {
       "values": [
-        248,
-        20,
-        150,
-        300,
-        95,
-        205,
-        345,
-        125,
-        272,
-        48,
-        175,
-        322
+        15,
+        45,
+        75,
+        105,
+        135,
+        165,
+        195,
+        225,
+        255,
+        285,
+        315,
+        345
       ],
+      "fallback": 272,
       "recipe": {
         "bg": "oklch(90.5% 0.08 H)",
         "line": "oklch(72% 0.125 H)",
         "ink": "oklch(29% 0.125 H)"
       },
-      "source": "tagHue(tourNo) in src/components/ui.tsx: a hash of the tour number picks the hue, set as --h on the element."
+      "source": "assignHues() in src/lib/tags.ts gives each pulled tour one hue; tours whose dates overlap do not share a hue while hues remain. useHue() sets it as --h on the element."
     },
     "shadows": [
       {
@@ -717,8 +718,8 @@
       "name": "Tour Tag",
       "kind": "chip",
       "refersTo": "tour-tag",
-      "description": "A tour number as a luggage tag. The hue comes from the tour number and is the same on every screen.",
-      "html": "<span class=\"ds-tags\"><span class=\"ds-tag\" style=\"--h: 248\">1042</span><span class=\"ds-tag\" style=\"--h: 20\">1057</span><span class=\"ds-tag\" style=\"--h: 150\">1063</span><span class=\"ds-tag\" style=\"--h: 300\">1071</span><span class=\"ds-tag ds-tag-held\">Nov</span></span>",
+      "description": "A tour number as a luggage tag. Each tour has one hue, the same on every screen.",
+      "html": "<span class=\"ds-tags\"><span class=\"ds-tag\" style=\"--h: 255\">1042</span><span class=\"ds-tag\" style=\"--h: 15\">1057</span><span class=\"ds-tag\" style=\"--h: 165\">1063</span><span class=\"ds-tag\" style=\"--h: 315\">1071</span><span class=\"ds-tag ds-tag-held\">Nov</span></span>",
       "css": ".ds-tags { display: inline-flex; flex-wrap: wrap; gap: 6px; } .ds-tag { --tag-bg: oklch(90.5% 0.08 var(--h, 272)); --tag-line: oklch(72% 0.125 var(--h, 272)); --tag-ink: oklch(29% 0.125 var(--h, 272)); display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px 0 6px; border-radius: 11px 5px 5px 11px; background: var(--tag-bg); color: var(--tag-ink); font-family: var(--font); font-variant-numeric: tabular-nums; font-size: var(--fs-2); font-stretch: 84%; font-weight: 700; letter-spacing: -0.005em; line-height: 1; white-space: nowrap; } .ds-tag::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--surface); box-shadow: inset 0 0 0 1px var(--tag-line); } .ds-tag-held { background: var(--sunk); color: var(--ink-2); }"
     },
     {
@@ -734,7 +735,7 @@
       "kind": "custom",
       "refersTo": "stay-bar",
       "description": "The signature: rooms down the side, nights across, each stay a tag-coloured bar. Hatched grey is a held room.",
-      "html": "<div class=\"ds-sb\"><div class=\"ds-sb-row\"><div class=\"ds-sb-label\"><b>201</b><small>4 beds</small></div><div class=\"ds-sb-track\"><button type=\"button\" class=\"ds-sb-bar\" style=\"grid-column: 1 / span 4; --h: 248\"><b>1042</b></button><button type=\"button\" class=\"ds-sb-bar\" style=\"grid-column: 6 / span 3; --h: 150\"><b>1063</b></button></div></div><div class=\"ds-sb-row\"><div class=\"ds-sb-label\"><b>202</b><small>3 beds</small></div><div class=\"ds-sb-track\"><span class=\"ds-sb-bar ds-sb-held\" style=\"grid-column: 1 / span 2\"><b>Nov</b></span><button type=\"button\" class=\"ds-sb-bar\" style=\"grid-column: 3 / span 5; --h: 20\"><b>1057</b></button></div></div><div class=\"ds-sb-row\"><div class=\"ds-sb-label\"><b>203</b><small>2 beds</small></div><div class=\"ds-sb-track\"><button type=\"button\" class=\"ds-sb-bar\" style=\"grid-column: 2 / span 3; --h: 300\"><b>1071</b></button><button type=\"button\" class=\"ds-sb-bar\" style=\"grid-column: 6 / span 3; --h: 150\"><b>1063</b></button></div></div></div>",
+      "html": "<div class=\"ds-sb\"><div class=\"ds-sb-row\"><div class=\"ds-sb-label\"><b>201</b><small>4 beds</small></div><div class=\"ds-sb-track\"><button type=\"button\" class=\"ds-sb-bar\" style=\"grid-column: 1 / span 4; --h: 255\"><b>1042</b></button><button type=\"button\" class=\"ds-sb-bar\" style=\"grid-column: 6 / span 3; --h: 165\"><b>1063</b></button></div></div><div class=\"ds-sb-row\"><div class=\"ds-sb-label\"><b>202</b><small>3 beds</small></div><div class=\"ds-sb-track\"><span class=\"ds-sb-bar ds-sb-held\" style=\"grid-column: 1 / span 2\"><b>Nov</b></span><button type=\"button\" class=\"ds-sb-bar\" style=\"grid-column: 3 / span 5; --h: 15\"><b>1057</b></button></div></div><div class=\"ds-sb-row\"><div class=\"ds-sb-label\"><b>203</b><small>2 beds</small></div><div class=\"ds-sb-track\"><button type=\"button\" class=\"ds-sb-bar\" style=\"grid-column: 2 / span 3; --h: 315\"><b>1071</b></button><button type=\"button\" class=\"ds-sb-bar\" style=\"grid-column: 6 / span 3; --h: 165\"><b>1063</b></button></div></div></div>",
       "css": ".ds-sb { border: 1px solid var(--line); border-radius: var(--r-3); background: var(--surface); overflow: hidden; font-family: var(--font); font-variant-numeric: tabular-nums; min-width: 340px; } .ds-sb-row { display: grid; grid-template-columns: 92px 1fr; min-height: 29px; } .ds-sb-row + .ds-sb-row { border-top: 1px solid var(--line); } .ds-sb-label { display: flex; align-items: center; gap: 6px; padding: 0 10px; border-right: 1px solid var(--line-strong); color: var(--ink); white-space: nowrap; } .ds-sb-label b { font-size: var(--fs-2); font-weight: 700; } .ds-sb-label small { font-size: var(--fs-1); color: var(--ink-2); } .ds-sb-track { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); align-items: center; padding: 3px 0; background-image: linear-gradient(to right, var(--line) 1px, transparent 1px); background-size: calc(100% / 8) 100%; background-position: -1px 0; } .ds-sb-bar { --tag-bg: oklch(90.5% 0.08 var(--h, 272)); --tag-line: oklch(72% 0.125 var(--h, 272)); --tag-ink: oklch(29% 0.125 var(--h, 272)); display: flex; align-items: center; gap: 5px; height: 22px; min-width: 0; margin: 0 2px 0 1px; padding: 0 6px 0 5px; border: 1px solid var(--tag-line); border-radius: 11px 5px 5px 11px; background: var(--tag-bg); color: var(--tag-ink); font: inherit; font-size: var(--fs-1); line-height: 1; white-space: nowrap; overflow: hidden; text-align: left; transition: border-color 0.15s, box-shadow 0.15s; } .ds-sb-bar::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--surface); box-shadow: inset 0 0 0 1px var(--tag-line); } .ds-sb-bar b { font-stretch: 84%; font-weight: 700; } button.ds-sb-bar { cursor: pointer; } button.ds-sb-bar:hover { border-color: var(--tag-ink); box-shadow: 0 2px 6px -2px var(--shadow); } button.ds-sb-bar:focus-visible { outline: 2px solid var(--rail); outline-offset: 2px; } .ds-sb-held { border-color: var(--line-strong); background: repeating-linear-gradient(135deg, var(--sunk) 0 4px, var(--line) 4px 8px); color: var(--ink-2); }"
     },
     {
@@ -764,10 +765,10 @@
   ],
   "narrative": {
     "northStar": "Group Tags",
-    "overview": "**Creative North Star: \"Group Tags\"**\n\nThe look comes from the colour-coded lanyards and luggage tags a ziyarat group carries. Every tour is a tag: a tinted pill with a punched hole and bold narrow lettering. The plan is read by following a tag's colour across the changes list, the nightly tables, the rooms-by-night board, the room picker and the hotel messages. The owner chose this direction; it replaced the previous look entirely.\n\nThe page is bright and flat: white surfaces on a faintly blue canvas, one ultramarine rail across the top, and thin lines instead of shadows. It is a working tool (surface mode: Operate) used mostly on a laptop or desktop, so density is high and the first screen is the plan itself: summary line, NKERP changes, then the occupancy chart. It does not open on a row of same-size stat cards or a dark splash.",
+    "overview": "The look comes from the colour-coded lanyards and luggage tags a ziyarat group carries. Every tour is a tag: a tinted pill with a punched hole and bold narrow lettering. The plan is read by following a tag's colour across the changes list, the nightly tables, the rooms-by-night board, the room picker and the hotel messages. The owner chose this direction; it replaced the previous look entirely.\n\nThe page is bright and flat: white surfaces on a faintly blue canvas, one ultramarine rail across the top, and thin lines instead of shadows. It is a working tool (surface mode: Operate) used mostly on a laptop or desktop, so density is high and the first screen is the plan itself: summary line, NKERP changes, then the occupancy chart. It does not open on a row of same-size stat cards or a dark splash.",
     "keyCharacteristics": [
       "One strong colour for the frame (the rail); colour elsewhere always means a tour, a hotel or a state.",
-      "Twelve tag hues, derived from the tour number, the same on every screen.",
+      "Twelve tag hues, one per tour, the same on every screen.",
       "Three hotel data colours in the order the hotels fill: teal, amber, raspberry.",
       "One type family in two widths; six sizes; tabular numerals everywhere.",
       "Flat tonal layering; shadows only on the side panel and as state feedback.",
@@ -776,7 +777,7 @@
     "rules": [
       {
         "name": "The Tag Follows the Tour Rule",
-        "body": "A tour's hue is hashed from its tour number (`tagHue` in `src/components/ui.tsx`). Never assign a tag colour by position, hotel or status.",
+        "body": "Hues are assigned once, from every tour pulled for either city (`assignHues` in `src/lib/tags.ts`), and read with `useHue()`, so a tour has one colour on every tab. Tours whose dates overlap do not share a hue while hues remain. Never assign a tag colour by position, hotel or status.",
         "section": "colors"
       },
       {
@@ -821,7 +822,7 @@
       }
     ],
     "dos": [
-      "Do put a tour tag wherever a tour appears, coloured with `hueStyle(tourNo)`.",
+      "Do put a tour tag wherever a tour appears, coloured through `useHue()`.",
       "Do list and stack hotels in fill order: Ruya, Araf, Hotel C.",
       "Do add a colour as an OKLCH token on `:root` before using it.",
       "Do put a warning in the row's Notes cell, next to the control that fixes it.",

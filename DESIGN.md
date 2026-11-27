@@ -32,6 +32,9 @@ colors:
   sunk: "oklch(95.6% 0.011 272)"
   line: "oklch(90.5% 0.014 272)"
   line-strong: "oklch(81% 0.022 272)"
+  control: "oklch(63% 0.03 272)"
+  caution-soft: "oklch(95% 0.045 60)"
+  caution-ink: "oklch(42% 0.11 50)"
   ink: "oklch(23% 0.045 272)"
   ink-2: "oklch(42% 0.035 272)"
   ink-3: "oklch(51% 0.03 272)"
@@ -129,7 +132,9 @@ Each has a solid for chart fills and 8px square dots, a soft tint for cells and 
 
 ### Neutral
 - **Blue-White Canvas** (`canvas`) under **White** (`surface`) panels; **Sunk** (`sunk`) for table headers, trays and expanded detail.
-- **Line** and **Strong Line** (`line`, `line-strong`): dividers and control outlines.
+- **Line** and **Strong Line** (`line`, `line-strong`): dividers and panel edges.
+- **Control** (`control`): the outline of inputs, selects and buttons, at least 3:1 against white.
+- **Caution** (`caution`, `caution-soft`, `caution-ink`): sample data and other cautions. Never the Araf amber.
 - **Ink, Ink 2, Ink 3** (`ink`, `ink-2`, `ink-3`): text, supporting text, quietest text. All three pass 4.5:1 on canvas, surface, sunk and the changed wash.
 
 ### Named Rules
