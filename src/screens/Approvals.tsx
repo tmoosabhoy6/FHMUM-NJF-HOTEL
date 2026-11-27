@@ -4,13 +4,15 @@ import { OPENING_BALANCE, PLANNING_START } from '../../shared/config';
 import { addDays, dayLabel, dayMonth, daysBetween, fullDate, isIsoDate } from '../../shared/dates';
 import { buildPlan } from '../../shared/engine';
 import type { HotelNames, PendingTour, PullMeta, Settings } from '../../shared/types';
+import { Occupancy } from '../components/Occupancy';
 import { PendingTours } from '../components/PendingTours';
-import type { SaveStatus } from '../lib/shared';
+import { PageBar, PullStatus, Shell } from '../components/Shell';
 import { PullChanges, ReapprovalBadge, TourAlerts } from '../components/TourChanges';
-import { Brand } from '../components/ui';
+import { HotelChip, Icon, TourTag } from '../components/ui';
 import { copy } from '../lib/copy';
 import { tourInput, withHotelPax, type InputChange, type TourInputs } from '../lib/inputs';
 import { useNames } from '../lib/names';
+import type { SaveStatus } from '../lib/shared';
 import type { PullResult } from '../lib/sync';
 
 interface Props {
@@ -60,14 +62,15 @@ function proposalText(plan: ApprovalPlan, names: HotelNames, from: string, to: s
 }
 
 function Recommendations({ plan, inputs, meta }: { plan: ApprovalPlan; inputs: TourInputs; meta: PullMeta }) {
-  const names = useNames();
   return (
     <div className="sheet-wrap">
-      <table className="sheet approval-proposals">
+      <table className="sheet proposals stack">
         <thead>
           <tr>
             <th scope="col">Tour</th>
-            <th scope="col" className="n">Hotel pax</th>
+            <th scope="col" className="n">
+              Hotel pax
+            </th>
             <th scope="col">Trip</th>
             <th scope="col">Proposed city stays</th>
             <th scope="col">Najaf hotel</th>
@@ -78,37 +81,55 @@ function Recommendations({ plan, inputs, meta }: { plan: ApprovalPlan; inputs: T
           {plan.recommendations.map((r) => {
             const adjustment = tourInput(inputs, r.tour, meta);
             const manual = adjustment?.pax !== undefined;
+            const recorded = previousStay(r);
             return (
-              <tr key={r.tour.tourId}>
-                <th scope="row">
-                  {r.tour.ref || r.tour.tourNo}
-                  <ReapprovalBadge change={meta.reapprovals?.[r.tour.tourId]} />
-                  <small>{r.tour.reapproval ? 'Awaiting re-approval' : r.tour.status}</small>
+              <tr key={r.tour.tourId} data-flag={Boolean(r.issue)}>
+                <th scope="row" className="tour" data-label="Tour">
+                  <TourTag no={r.tour.tourNo} title={r.tour.ref || undefined} />
+                  <span className="leader">{r.tour.reapproval ? 'Awaiting re-approval' : r.tour.status}</span>
                 </th>
-                <td className="n strong">
-                  <span>{r.pax ?? '—'}</span>
-                  {manual && <small className="tour-change pax">Pax adjusted · {adjustment.paxBefore ?? r.tour.needHotel ?? 'unconfirmed'} → {r.pax}</small>}
+                <td className="n strong" data-label="Hotel pax">
+                  {r.pax ?? '–'}
+                  {manual && <small>Adjusted from {adjustment.paxBefore ?? r.tour.needHotel ?? 'unconfirmed'}</small>}
                   {manual && adjustment.paxBefore !== undefined && adjustment.paxBefore !== r.tour.needHotel && <small>NKERP now {r.tour.needHotel ?? 'unconfirmed'}</small>}
                 </td>
-                <td className="when">
-                  {r.tour.start && isIsoDate(r.tour.start) ? dayMonth(r.tour.start) : '—'} – {r.tour.end && isIsoDate(r.tour.end) ? dayMonth(r.tour.end) : '—'}
+                <td className="when" data-label="Trip">
+                  {r.tour.start && isIsoDate(r.tour.start) ? dayMonth(r.tour.start) : '–'} to {r.tour.end && isIsoDate(r.tour.end) ? dayMonth(r.tour.end) : '–'}
                 </td>
-                <td>
-                  {r.route ? r.route.segments.map((leg) => (
-                    <div className="approval-leg" key={leg.city} title={`${fullDate(leg.from)} to ${fullDate(leg.to)}`}>
-                      <b>{approvalCity(leg.city)}</b> {dayMonth(leg.from)}–{dayMonth(leg.to)}
-                      <small>{daysBetween(leg.from, leg.to)} nights</small>
-                    </div>
-                  )) : 'Review needed'}
+                <td data-label="Proposed city stays">
+                  {r.route ? (
+                    <span className="legs">
+                      {r.route.segments.map((leg) => (
+                        <span className="leg" key={leg.city} data-city={leg.city} title={`${fullDate(leg.from)} to ${fullDate(leg.to)}`}>
+                          <b>{approvalCity(leg.city)}</b>
+                          {dayMonth(leg.from)} to {dayMonth(leg.to)}
+                          <small>{daysBetween(leg.from, leg.to)} nights</small>
+                        </span>
+                      ))}
+                    </span>
+                  ) : (
+                    'Review needed'
+                  )}
                 </td>
-                <td>
-                  {r.hotel ? <span className="chip" data-hotel={r.hotel}>{names[r.hotel]}</span> : '—'}
-                  {r.rooms.length > 0 && <small className="approval-room-list">{r.rooms.map((room) => room.label).join(', ')}</small>}
+                <td data-label="Najaf hotel">
+                  {r.hotel ? <HotelChip hotel={r.hotel} /> : '–'}
+                  {r.rooms.length > 0 && <small className="room-list">Rooms {r.rooms.map((room) => room.label).join(', ')}</small>}
                 </td>
-                <td className="notes">
-                  {previousStay(r) && <span className="note">{previousStay(r)}</span>}
-                  {r.issue && <span className="note" data-warn>{r.issue}</span>}
-                  {r.route?.needsFlightCheck && <span className="note" data-warn>Confirm the departure flight. An Iraqi Airways departure from Najaf or Baghdad would require one more hotel night.</span>}
+                <td className="notes" data-label="Review notes">
+                  <ReapprovalBadge change={meta.reapprovals?.[r.tour.tourId]} />
+                  {r.issue && (
+                    <span className="note" data-warn>
+                      <Icon name="alert" size={14} />
+                      {r.issue}
+                    </span>
+                  )}
+                  {r.route?.needsFlightCheck && (
+                    <span className="note" data-warn>
+                      <Icon name="alert" size={14} />
+                      Confirm the departure flight. An Iraqi Airways departure from Najaf or Baghdad would require one more hotel night.
+                    </span>
+                  )}
+                  {recorded && <span className="note">{recorded}</span>}
                   {r.route?.hasDepartureDay && <span className="note">Iraqi Airways departure day included in hotel occupancy.</span>}
                   {!manual && r.tour.hotelPaxSource === 'tour' && <span className="note">Hotel pax from NKERP tour totals.</span>}
                   {r.tour.remarks && <span className="note">{r.tour.remarks}</span>}
@@ -126,37 +147,68 @@ function DailyCapacity({ plan }: { plan: ApprovalPlan }) {
   const names = useNames();
   return (
     <div className="sheet-wrap">
-      <table className="sheet approval-days">
+      <table className="sheet capacity">
         <thead>
           <tr>
             <th scope="col">Night</th>
-            <th scope="col" className="n">Committed {names.ruya} pax</th>
-            <th scope="col" className="n">Proposed {names.ruya} pax</th>
-            <th scope="col">Projected occupancy</th>
-            <th scope="col" className="n">{names.ruya} beds free</th>
-            <th scope="col" className="n">Proposed {names.araf} pax</th>
-            <th scope="col" className="n">Proposed {names.c} pax</th>
-            <th scope="col">Proposed Najaf arrivals</th>
+            <th scope="col" className="n" data-hotel="ruya">
+              Committed {names.ruya}
+            </th>
+            <th scope="col" className="n" data-hotel="ruya">
+              Proposed {names.ruya}
+            </th>
+            <th scope="col" className="n">
+              {names.ruya} guests <small>of {plan.capacity}</small>
+            </th>
+            <th scope="col" className="n">
+              {names.ruya} beds free
+            </th>
+            <th scope="col" className="n" data-hotel="araf">
+              Proposed {names.araf}
+            </th>
+            <th scope="col" className="n" data-hotel="c">
+              Proposed {names.c}
+            </th>
+            <th scope="col" className="wide">
+              Proposed Najaf arrivals
+            </th>
           </tr>
         </thead>
         <tbody>
           {plan.days.map((day) => {
             const pax = day.fixedRuya + day.proposedRuya;
             return (
-              <tr key={day.date}>
-                <th scope="row">{dayLabel(day.date)}</th>
-                <td className="n">{day.fixedRuya}</td>
-                <td className="n">{day.proposedRuya}</td>
-                <td>
-                  <div className="approval-occupancy">
-                    <progress aria-label={`${names.ruya} occupancy on ${dayLabel(day.date)}`} value={pax} max={plan.capacity || 1} />
-                    <span>{pax} / {plan.capacity}</span>
-                  </div>
+              <tr key={day.date} data-fri={new Date(`${day.date}T00:00:00Z`).getUTCDay() === 5}>
+                <th scope="row" className="date">
+                  {dayLabel(day.date)}
+                </th>
+                <td className="n">{day.fixedRuya || '–'}</td>
+                <td className="n cell" data-hotel="ruya" data-on={day.proposedRuya > 0}>
+                  {day.proposedRuya || '–'}
                 </td>
-                <td className="n">{day.fixedRoomConflict ? 'Review committed rooms' : Math.max(0, plan.capacity - day.ruyaBedsUsed)}</td>
-                <td className="n">{day.proposedAraf}</td>
-                <td className="n">{day.proposedOverflow}</td>
-                <td>{day.arrivals.map((arrival) => `${arrival.tourNo} (${arrival.pax}, ${names[arrival.hotel]})`).join(', ') || '—'}</td>
+                <td className="n cell" data-hotel="ruya" data-on={pax > 0}>
+                  <span className="meter" aria-hidden="true">
+                    <i style={{ width: `${Math.min(100, (pax / Math.max(1, plan.capacity)) * 100)}%` }} />
+                  </span>
+                  {pax || '–'}
+                </td>
+                <td className="n free" data-low={day.fixedRoomConflict || plan.capacity - day.ruyaBedsUsed <= 0}>
+                  {day.fixedRoomConflict ? 'Review committed rooms' : Math.max(0, plan.capacity - day.ruyaBedsUsed)}
+                </td>
+                <td className="n cell" data-hotel="araf" data-on={day.proposedAraf > 0}>
+                  {day.proposedAraf || '–'}
+                </td>
+                <td className="n cell" data-hotel="c" data-on={day.proposedOverflow > 0}>
+                  {day.proposedOverflow || '–'}
+                </td>
+                <td className="moves wide">
+                  {day.arrivals.map((arrival) => (
+                    <span key={arrival.tourNo}>
+                      <TourTag no={arrival.tourNo} />
+                      {arrival.pax} to {names[arrival.hotel]}
+                    </span>
+                  ))}
+                </td>
               </tr>
             );
           })}
@@ -166,7 +218,7 @@ function DailyCapacity({ plan }: { plan: ApprovalPlan }) {
   );
 }
 
-function Planner({ dataset, inputs, settings }: { dataset: PullResult; inputs: TourInputs; settings: Settings }) {
+function Planner({ dataset, inputs, settings, onEditPax }: { dataset: PullResult; inputs: TourInputs; settings: Settings; onEditPax: (() => void) | null }) {
   const names = useNames();
   const { meta } = dataset;
   const coveredFrom = meta.from < PLANNING_START ? PLANNING_START : meta.from;
@@ -201,90 +253,200 @@ function Planner({ dataset, inputs, settings }: { dataset: PullResult; inputs: T
     return () => worker.terminate();
   }, [request]);
 
-  if (!rangeAvailable) return <p className="read-empty">Pull a date range that includes the Najaf planning period starting {fullDate(PLANNING_START)}.</p>;
   const plan = result?.request === request ? result?.plan : undefined;
+  const occDays = useMemo(
+    () =>
+      (plan?.days ?? []).map((d) => ({
+        date: d.date,
+        values: [d.fixedRuya, d.proposedRuya, d.proposedAraf, d.proposedOverflow],
+        note: d.fixedRoomConflict ? 'review committed rooms' : `${Math.max(0, (plan?.capacity ?? 0) - d.ruyaBedsUsed)} ${names.ruya} beds free`,
+      })),
+    [plan, names.ruya],
+  );
 
   return (
     <>
-      <div className="approval-filters">
-        <label className="approval-field">
-          Tour arrivals from
-          <input type="date" value={from} min={coveredFrom} max={coveredThrough} onChange={(event) => setDates({ from: event.target.value || coveredFrom, to })} />
-        </label>
-        <label className="approval-field">
-          Tour arrivals through
-          <input type="date" value={to} min={from} max={coveredThrough} onChange={(event) => setDates({ from, to: event.target.value || coveredThrough })} />
-        </label>
-        <p>NKERP data pulled {pullTime.format(new Date(meta.fetchedAt))}, Najaf local time. Coverage through {fullDate(coveredThrough)}.</p>
-      </div>
-      {!meta.coveredThrough && <p className="approval-notice">This saved pull predates the approval planner. Refresh NKERP data to verify pending hotel pax, trip dates and departure flights.</p>}
-      {plan === undefined && <p className="read-empty" role="status">Building the approval plan…</p>}
-      {plan === null && <p className="read-empty" role="alert">The approval planner could not finish. Try a shorter date range.</p>}
-      {plan && (
-        <>
-          <dl className="approval-summary">
-            <div><dt>{names.ruya} guest-nights</dt><dd>{plan.fixedGuestNights + plan.ruyaGuestNights}</dd><small>{plan.fixedGuestNights} committed + {plan.ruyaGuestNights} proposed</small></div>
-            <div><dt>Pending tours in {names.ruya}</dt><dd>{plan.ruyaTours}</dd><small>{plan.capacity} beds in service</small></div>
-            <div><dt>Pending tours in other hotels</dt><dd>{plan.arafTours + plan.overflowTours}</dd><small>{plan.arafTours} {names.araf} · {plan.overflowTours} {names.c}</small></div>
-            <div><dt>Tours to review</dt><dd>{plan.heldTours}</dd></div>
-          </dl>
-          {plan.limited && <p className="approval-notice">Showing the best feasible plan found within the search limit.</p>}
-          <TourAlerts meta={meta} />
-          <PullChanges meta={meta} />
-          <section className="block">
-            <div className="block-head approval-block-head">
-              <div>
-                <h2>Proposed approvals</h2>
-                <p>Check-in and check-out dates share one transfer day. Review the proposals in NKERP before approving.</p>
-              </div>
-              <button className="btn" type="button" disabled={!plan.recommendations.length} onClick={async () => {
-                if (await copy(proposalText(plan, names, from, to, inputs, meta))) {
-                  setCopied(true);
-                  window.setTimeout(() => setCopied(false), 1800);
-                }
-              }}>{copied ? 'Copied' : 'Copy proposal'}</button>
+      <PageBar
+        title="Najaf hotel approval plan"
+        sections={plan ? [
+          { id: 'a-overview', label: 'Overview' },
+          { id: 'a-proposals', label: 'Proposed approvals', count: plan.recommendations.length },
+          { id: 'a-capacity', label: 'Nightly capacity' },
+        ] : []}
+        actions={
+          <>
+            {onEditPax ? (
+              <button className="btn" type="button" onClick={onEditPax}>
+                Edit pending hotel pax
+              </button>
+            ) : null}
+            {plan ? (
+              <button
+                className="btn primary"
+                type="button"
+                disabled={!plan.recommendations.length}
+                onClick={async () => {
+                  if (await copy(proposalText(plan, names, from, to, inputs, meta))) {
+                    setCopied(true);
+                    window.setTimeout(() => setCopied(false), 1800);
+                  }
+                }}
+              >
+                <Icon name={copied ? 'check' : 'copy'} />
+                {copied ? 'Copied' : 'Copy proposal'}
+              </button>
+            ) : null}
+          </>
+        }
+      />
+      <main className="page">
+        <div className="lead">
+          <p>
+            Keeps approved stays fixed and fits pending tours into {names.ruya} as whole groups. Trips split evenly between Karbala and Najaf, with the extra night in
+            Karbala on odd-length trips.
+          </p>
+        </div>
+        {!rangeAvailable ? (
+          <p className="empty">Pull a date range that includes the Najaf planning period starting {fullDate(PLANNING_START)}.</p>
+        ) : (
+          <>
+            <div className="filters">
+              <label className="field">
+                Tour arrivals from
+                <input type="date" value={from} min={coveredFrom} max={coveredThrough} onChange={(event) => setDates({ from: event.target.value || coveredFrom, to })} />
+              </label>
+              <label className="field">
+                Tour arrivals through
+                <input type="date" value={to} min={from} max={coveredThrough} onChange={(event) => setDates({ from, to: event.target.value || coveredThrough })} />
+              </label>
+              <p>
+                NKERP data pulled {pullTime.format(new Date(meta.fetchedAt))}, Najaf local time.
+                <br />
+                Coverage through {fullDate(coveredThrough)}.
+              </p>
             </div>
-            {plan.recommendations.length ? <Recommendations plan={plan} inputs={inputs} meta={meta} /> : <p className="read-empty">No pending tours with hotel pax to plan in this range.</p>}
-          </section>
-          <section className="block">
-            <div className="block-head">
-              <h2>Najaf nightly capacity</h2>
-              <p>Occupancy counts guests. Free beds account for entire rooms reserved for each group.</p>
-            </div>
-            <DailyCapacity plan={plan} />
-          </section>
-        </>
-      )}
+            {!meta.coveredThrough && (
+              <p className="notice" data-tone="warn">
+                <Icon name="alert" />
+                This saved pull predates the approval planner. Refresh NKERP data to verify pending hotel pax, trip dates and departure flights.
+              </p>
+            )}
+            {plan === undefined && (
+              <p className="empty" role="status">
+                Building the approval plan…
+              </p>
+            )}
+            {plan === null && (
+              <p className="notice" data-tone="bad" role="alert">
+                <Icon name="alert" />
+                The approval planner could not finish. Try a shorter date range.
+              </p>
+            )}
+            {plan && (
+              <>
+                {plan.limited && (
+                  <p className="notice" data-tone="warn">
+                    <Icon name="alert" />
+                    Showing the best feasible plan found within the search limit.
+                  </p>
+                )}
+                <TourAlerts meta={meta} />
+                <PullChanges meta={meta} />
+                <section className="block" id="a-overview" aria-label="Overview">
+                  <div className="panel">
+                    <dl className="stats">
+                      <div>
+                        <dt>{names.ruya} guest-nights</dt>
+                        <dd>{plan.fixedGuestNights + plan.ruyaGuestNights}</dd>
+                        <small>
+                          {plan.fixedGuestNights} committed + {plan.ruyaGuestNights} proposed
+                        </small>
+                      </div>
+                      <div>
+                        <dt>Pending tours in {names.ruya}</dt>
+                        <dd>{plan.ruyaTours}</dd>
+                        <small>{plan.capacity} beds in service</small>
+                      </div>
+                      <div>
+                        <dt>Pending tours in other hotels</dt>
+                        <dd>{plan.arafTours + plan.overflowTours}</dd>
+                        <small>
+                          {plan.arafTours} {names.araf} · {plan.overflowTours} {names.c}
+                        </small>
+                      </div>
+                      <div data-hot={plan.heldTours > 0}>
+                        <dt>Tours to review</dt>
+                        <dd>{plan.heldTours}</dd>
+                        <small>{plan.heldTours ? 'See the review notes below' : 'Nothing held back'}</small>
+                      </div>
+                    </dl>
+                    <Occupancy
+                      series={[
+                        { id: 'ruya', label: `Committed ${names.ruya}` },
+                        { id: 'ruya-new', label: `Proposed ${names.ruya}` },
+                        { id: 'araf', label: `Proposed ${names.araf}` },
+                        { id: 'c', label: `Proposed ${names.c}` },
+                      ]}
+                      days={occDays}
+                      capacity={plan.capacity}
+                      capLabel={`${names.ruya} beds (${plan.capacity})`}
+                    />
+                  </div>
+                </section>
+                <section className="block" id="a-proposals">
+                  <div className="block-head">
+                    <div>
+                      <h2>Proposed approvals</h2>
+                      <p>Check-in and check-out dates share one transfer day. Review the proposals in NKERP before approving.</p>
+                    </div>
+                  </div>
+                  {plan.recommendations.length ? <Recommendations plan={plan} inputs={inputs} meta={meta} /> : <p className="empty">No pending tours with hotel pax to plan in this range.</p>}
+                </section>
+                <section className="block" id="a-capacity">
+                  <div className="block-head">
+                    <div>
+                      <h2>Najaf nightly capacity</h2>
+                      <p>Occupancy counts guests. Free beds account for entire rooms reserved for each group.</p>
+                    </div>
+                  </div>
+                  <DailyCapacity plan={plan} />
+                </section>
+              </>
+            )}
+          </>
+        )}
+      </main>
     </>
   );
 }
 
 export function ApprovalsView({ tabs, dataset, inputs, settings, loaded, saveStatus, onEdit, onPull }: Props) {
-  const names = useNames();
   const [editPax, setEditPax] = useState(false);
   return (
-    <div className="app approvals">
-      <header className="app-top">
-        <div className="app-top-inner">
-          <Brand />
-          {tabs}
-          <div className="top-actions">
-            {loaded && <span className="save-status" role="status" data-status={saveStatus}>{saveStatus === 'saving' ? 'Saving…' : saveStatus === 'offline' ? 'Offline · retrying' : 'Saved for everyone'}</span>}
-            {Boolean(dataset?.meta.pending?.length) && <button className="btn" type="button" onClick={() => setEditPax(true)}>Edit pending hotel pax</button>}
-            <button className="btn" type="button" onClick={onPull}>{dataset ? 'Refresh NKERP data' : 'Pull from NKERP'}</button>
-          </div>
-        </div>
-      </header>
-      <main className="page">
-        <div className="overview-head">
-          <h1>Najaf hotel approval plan</h1>
-          <p>Keep approved stays fixed and fit pending tours into {names.ruya} as whole groups. Trips split evenly between Karbala and Najaf, with the extra night in Karbala on odd-length trips.</p>
-        </div>
-        {dataset ? <Planner dataset={dataset} inputs={inputs} settings={settings} /> : (
-          <p className="read-empty" role="status">{loaded ? 'Pull Najaf data from NKERP to plan pending hotel stays.' : 'Looking for the saved Najaf pull…'}</p>
-        )}
-      </main>
+    <Shell
+      tabs={tabs}
+      status={dataset ? <PullStatus meta={dataset.meta} saveStatus={saveStatus} loaded={loaded} /> : null}
+      actions={
+        <button className="btn on-rail" type="button" onClick={onPull}>
+          <Icon name="refresh" />
+          {dataset ? 'Refresh NKERP data' : 'Pull from NKERP'}
+        </button>
+      }
+    >
+      {dataset ? (
+        <Planner dataset={dataset} inputs={inputs} settings={settings} onEditPax={dataset.meta.pending?.length ? () => setEditPax(true) : null} />
+      ) : (
+        <>
+          <PageBar title="Najaf hotel approval plan" />
+          <main className="page">
+            <div className="empty" role="status">
+              <h2>{loaded ? 'No Najaf pull yet' : 'Looking for the saved Najaf pull…'}</h2>
+              {loaded ? <p>Pull Najaf data from NKERP to plan pending hotel stays.</p> : null}
+            </div>
+          </main>
+        </>
+      )}
       {editPax && dataset?.meta.pending && <PendingTours tours={dataset.meta.pending} meta={dataset.meta} inputs={inputs} onEdit={onEdit} onClose={() => setEditPax(false)} />}
-    </div>
+    </Shell>
   );
 }

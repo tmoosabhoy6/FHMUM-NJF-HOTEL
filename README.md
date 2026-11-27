@@ -64,17 +64,24 @@ Build): every push to `main` builds with `npm run build` and deploys with
      whose guest list NKERP has not filled in yet (common a few weeks out) is
      counted from the tour's own totals (guests who need a hotel / housed by
      NKERP), marked in the Groups table, until the list is there.
-2. **Plan.** The page opens straight on the plan, laid out like the Excel
-   file: a summary per hotel, the daily plan (click a night to see the Ruya
-   rooms floor by floor), the bookings to make, and the groups. Under each
-   arrival and departure date: "(subvenue)" for a Karbala transfer, else the
-   flight code and time.
+2. **Plan.** The page opens straight on the plan, in the same order as the
+   Excel file: a chart of guests per hotel for every night against the Ruya
+   beds, with a summary per hotel; the daily plan; the bookings to make; and
+   the groups. The bar under the header jumps to each section. The daily plan
+   has two views: **By night** (click a night, or its column in the chart, to
+   see the Ruya rooms floor by floor) and **By room** (every Ruya room against
+   every night, each tour's stay as a bar in that tour's colour; click a bar
+   to choose its rooms). A tour keeps the same tag colour everywhere. Under
+   each arrival and departure date: "(subvenue)" for a Karbala transfer, else
+   the flight code and time.
 3. **Hotel pax and rooms.** Edit the number of guests who need a hotel in
    the Groups table. Enter zero to skip booking for that tour, or use
    **Use NKERP** to remove the override. The row shows the original count
    and the override. Type rooms or use **Choose rooms** for exact Ruya
    rooms. These edits save by exact tour ID, and the Najaf plan recalculates
-   after each change.
+   after each change. The Groups table can be narrowed to groups outside
+   Ruya, groups changed in NKERP, or groups with no rooms typed, and searched
+   by tour or group leader.
 4. **Hotel messages.** One message per group in the team's format (`shared/messages.ts`),
    by check-in date, filtered by hotel, with a Copy button on each and "Copy
    all" per date. Two types: requirements only, or with the planned room

@@ -1,17 +1,20 @@
 import { AnimatePresence } from 'motion/react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { dayLabel, dayMonth, fullDate, rangeLabel } from '../../shared/dates';
+import { dayLabel, dayMonth, rangeLabel } from '../../shared/dates';
 import { karbalaRows, type KarbalaRow } from '../../shared/karbala';
 import { describeRooms, parseRoomSpec } from '../../shared/roomSpec';
 import type { DateChange, PullMeta } from '../../shared/types';
-import { ChangeBadge, PaxInput, PullChanges, ReapprovalBadge, TourAlerts, useChanged } from '../components/TourChanges';
+import { CopyButton } from '../components/HotelMessages';
 import { PendingTours } from '../components/PendingTours';
-import { Brand, groupsText, guests, Num } from '../components/ui';
+import { PullPanel } from '../components/PullPanel';
+import { PageBar, PullStatus, Shell } from '../components/Shell';
+import { ChangeBadge, PaxInput, PullChanges, ReapprovalBadge, TourAlerts, useChanged } from '../components/TourChanges';
+import { groupsText, guests, Icon, TourTag } from '../components/ui';
 import { howText } from '../lib/bookings';
 import { copy } from '../lib/copy';
 import type { Karbala } from '../lib/karbala';
 import type { SaveStatus } from '../lib/shared';
-import { STEP_ORDER, stepTitle, type ServerState } from '../lib/sync';
+import type { ServerState } from '../lib/sync';
 
 interface Props {
   k: Karbala;
@@ -20,94 +23,6 @@ interface Props {
   departureDayRule: boolean;
   saveStatus: SaveStatus;
   loaded: boolean;
-  ago: (iso: string) => string;
-}
-
-// ---- pull ------------------------------------------------------------------------
-
-function PullPanel({ k, server, onClose }: { k: Karbala; server: ServerState; onClose: (() => void) | null }) {
-  const { range, progress } = k;
-  return (
-    <section className="k-pull" aria-live="polite">
-      {k.pulling ? (
-        <>
-          <h1>Reading NKERP for Karbala</h1>
-          <p className="k-lede">
-            From {fullDate(range.from)}
-            {range.to ? ` to ${fullDate(range.to)}` : ', as far ahead as tours are approved'}.
-          </p>
-          <ol className="steps k-steps">
-            {STEP_ORDER.map((id, i) => {
-              const step = progress.steps[id];
-              return (
-                <li key={id} className="step" data-status={step.status}>
-                  <span className="step-dot">{step.status === 'done' ? '✓' : i + 1}</span>
-                  <div>
-                    <div className="step-title">{stepTitle(id, 'karbala')}</div>
-                    <div className="step-detail">{step.detail}</div>
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-          <p className="k-tally">
-            <b>
-              <Num value={progress.groups} />
-            </b>{' '}
-            groups, <Num value={progress.guests} /> guests who need a hotel so far
-          </p>
-          <button className="btn" onClick={k.stop}>
-            Stop the pull
-          </button>
-        </>
-      ) : (
-        <>
-          <h1>Karbala hotel messages</h1>
-          <p className="k-lede">
-            Pulls every approved FH Mumbai tour staying in Karbala from NKERP, the same way as Najaf: the guests who need a hotel, and the
-            tours still pending. Edit hotel pax and rooms, then copy the updated messages.
-          </p>
-          <form
-            className="k-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              k.pull();
-            }}
-          >
-            <label className="k-field">
-              First night
-              <input type="date" value={range.from} required onChange={(e) => k.setRange((r) => ({ from: e.target.value, to: r.to && r.to < e.target.value ? '' : r.to }))} />
-            </label>
-            <label className="k-field">
-              Last night
-              <input type="date" value={range.to} min={range.from} onChange={(e) => k.setRange((r) => ({ ...r, to: e.target.value }))} />
-              <small>{range.to ? `Through ${dayMonth(range.to)}` : 'Empty: everything approved so far'}</small>
-            </label>
-            <div className="k-actions">
-              <button className="btn solid" type="submit" disabled={server !== 'ready' || !range.from}>
-                {k.error ? 'Pull again' : 'Pull Karbala from NKERP'}
-              </button>
-              {onClose ? (
-                <button className="btn quiet" type="button" onClick={onClose}>
-                  Cancel
-                </button>
-              ) : null}
-            </div>
-          </form>
-          {k.error ? (
-            <p className="k-warn" role="alert">
-              {k.error}
-            </p>
-          ) : null}
-          {server === 'no-login' ? (
-            <p className="k-warn">NKERP sign-in is not set up on the server. Add NKERP_LOGIN_ID and NKERP_PASSWORD to its settings, then reload.</p>
-          ) : server === 'no-server' ? (
-            <p className="k-warn">The NKERP connection is not reachable right now. Reload to try again.</p>
-          ) : null}
-        </>
-      )}
-    </section>
-  );
 }
 
 // ---- groups ------------------------------------------------------------------------
@@ -115,7 +30,7 @@ function PullPanel({ k, server, onClose }: { k: Karbala; server: ServerState; on
 function RoomsInput({ row, spec, onInput }: { row: KarbalaRow; spec: string; onInput: Karbala['onInput'] }) {
   const parsed = parseRoomSpec(spec);
   const typed = Boolean(spec.trim());
-  const read = parsed.error ? { text: parsed.error, bad: true } : typed ? { text: `${describeRooms(parsed.rooms)} = ${parsed.beds}`, bad: parsed.beds < row.group.pax } : null;
+  const read = parsed.error ? { text: parsed.error, bad: true } : typed ? { text: `${describeRooms(parsed.rooms)} = ${parsed.beds} beds`, bad: parsed.beds < row.group.pax } : null;
   return (
     <div className="rooms-cell" data-bad={read?.bad}>
       <input
@@ -123,6 +38,7 @@ function RoomsInput({ row, spec, onInput }: { row: KarbalaRow; spec: string; onI
         value={spec}
         placeholder="e.g. 2x6, 3x1"
         aria-label={`Rooms tour ${row.group.tourNo} needs in Karbala`}
+        aria-invalid={read?.bad || undefined}
         maxLength={1000}
         spellCheck={false}
         onChange={(e) => onInput(row.group, { spec: e.target.value.trim() ? e.target.value : null })}
@@ -138,20 +54,18 @@ function GroupsTable({ rows, meta, inputs, onInput, changes }: {
   const changed = useChanged(meta);
   return (
     <div className="sheet-wrap">
-      <table className="sheet groups">
+      <table className="sheet kgroups stack">
         <thead>
           <tr>
-            <th scope="col">Tour</th>
-            <th scope="col">Group leader</th>
-            <th scope="col" className="n">
-              Hotel pax
-            </th>
+            <th scope="col">Tour and group leader</th>
+            <th scope="col">Hotel pax</th>
             <th scope="col">Arrives</th>
             <th scope="col">Leaves</th>
             <th scope="col" className="n">
               Nights
             </th>
             <th scope="col">Rooms asked for</th>
+            <th scope="col">Notes</th>
           </tr>
         </thead>
         <tbody>
@@ -159,30 +73,32 @@ function GroupsTable({ rows, meta, inputs, onInput, changes }: {
             const { group } = row;
             return (
               <tr key={group.id} data-changed={changed(group.tourId)}>
-                <th scope="row" className="tour">
-                  {group.tourNo}
-                  <ReapprovalBadge change={changes?.[group.tourId]} />
-                  <ChangeBadge tourId={group.tourId} meta={meta} />
+                <th scope="row" className="tour" data-label="Tour">
+                  <TourTag no={group.tourNo} />
+                  <span className="leader">{group.leader || 'No group leader'}</span>
                 </th>
-                <td className="leader">{group.leader || '–'}</td>
-                <td className="n strong">
+                <td data-label="Hotel pax">
                   <PaxInput tourNo={group.tourNo} pax={group.pax} nkerpPax={group.nkerpPax} paxBefore={group.paxBefore}
                     infants={group.infants} onChange={(change) => onInput(group, change)} />
                 </td>
-                <td className="when">
+                <td className="when" data-label="Arrives">
                   {dayMonth(group.checkIn)}
                   <small>{howText(group.arrival, group.arrivalAt)}</small>
                 </td>
-                <td className="when">
+                <td className="when" data-label="Leaves">
                   {dayMonth(group.checkOut)}
                   <small>{howText(group.departure, group.departureAt)}</small>
                 </td>
-                <td className="n">
+                <td className="n" data-label="Nights">
                   {row.nights.length}
-                  {row.departureDay ? <small className="k-depday" title="Flies Iraqi Airways after Karbala: the departure day counts as a night, as in Najaf">incl. departure day</small> : null}
                 </td>
-                <td className="rooms">
+                <td data-label="Rooms asked for">
                   <RoomsInput row={row} spec={inputs[group.id]?.spec ?? ''} onInput={onInput} />
+                </td>
+                <td className="notes" data-label="Notes">
+                  <ChangeBadge tourId={group.tourId} meta={meta} />
+                  <ReapprovalBadge change={changes?.[group.tourId]} />
+                  {row.departureDay ? <span className="note">Flies Iraqi Airways after Karbala: the departure day counts as a night, as in Najaf.</span> : null}
                 </td>
               </tr>
             );
@@ -212,9 +128,7 @@ function Messages({ rows }: { rows: KarbalaRow[] }) {
 
   return (
     <div className="k-messages">
-      {noNights.length ? (
-        <p className="msg-note">No night in Karbala, so no message: tour {noNights.map((r) => r.group.tourNo).join(', ')}.</p>
-      ) : null}
+      {noNights.length ? <p className="msg-note">No night in Karbala, so no message: tour {noNights.map((r) => r.group.tourNo).join(', ')}.</p> : null}
       {byDate.map(([date, list]) => {
         const key = `day-${date}`;
         return (
@@ -224,25 +138,26 @@ function Messages({ rows }: { rows: KarbalaRow[] }) {
               <span>
                 {list.length} {list.length === 1 ? 'message' : 'messages'}
               </span>
-              {list.length > 1 ? (
-                <button className="btn" onClick={() => flash(key, list.map((r) => r.message!.text).join('\n\n'))}>
-                  {copied === key ? 'Copied' : `Copy all ${list.length}`}
-                </button>
-              ) : null}
+              {list.length > 1 ? <CopyButton done={copied === key} label={`Copy all ${list.length}`} onClick={() => flash(key, list.map((r) => r.message!.text).join('\n\n'))} /> : null}
             </div>
-            {list.map(({ group, message, issue }) => (
-              <article className="msg" key={group.id} data-city="karbala">
-                <div className="msg-head">
-                  <b>Tour {group.tourNo}</b>
-                  <span className="msg-who">{group.leader}</span>
-                  <button className="btn solid msg-copy" data-done={copied === group.id} onClick={() => flash(group.id, message!.text)}>
-                    {copied === group.id ? 'Copied' : 'Copy'}
-                  </button>
-                </div>
-                {issue ? <p className="msg-warn">{issue}</p> : message!.rooms ? null : <p className="msg-warn">No rooms yet: type them in the Groups table.</p>}
-                <pre className="msg-text">{message!.text}</pre>
-              </article>
-            ))}
+            <div className="msg-grid">
+              {list.map(({ group, message, issue }) => (
+                <article className="msg" key={group.id}>
+                  <div className="msg-head">
+                    <TourTag no={group.tourNo} />
+                    <span className="msg-who">{group.leader}</span>
+                    <CopyButton done={copied === group.id} onClick={() => flash(group.id, message!.text)} />
+                  </div>
+                  {issue || !message!.rooms ? (
+                    <p className="msg-warn">
+                      <Icon name="alert" size={14} />
+                      {issue ?? 'No rooms yet: type them in the Groups table.'}
+                    </p>
+                  ) : null}
+                  <pre className="msg-text">{message!.text}</pre>
+                </article>
+              ))}
+            </div>
           </section>
         );
       })}
@@ -252,7 +167,7 @@ function Messages({ rows }: { rows: KarbalaRow[] }) {
 
 // ---- the page --------------------------------------------------------------------
 
-export function KarbalaView({ k, tabs, server, departureDayRule, saveStatus, loaded, ago }: Props) {
+export function KarbalaView({ k, tabs, server, departureDayRule, saveStatus, loaded }: Props) {
   const [pullOpen, setPullOpen] = useState(false);
   const [showPending, setShowPending] = useState(false);
   const { dataset, groups, inputs } = k;
@@ -262,99 +177,102 @@ export function KarbalaView({ k, tabs, server, departureDayRule, saveStatus, loa
     if (!k.pulling && !k.error) setPullOpen(false);
   }, [k.pulling, k.error]);
   const meta = dataset?.meta;
-  const showPull = !dataset || pullOpen || k.pulling || Boolean(k.error);
+  const showPull = !dataset || !meta || pullOpen || k.pulling || Boolean(k.error);
   const planned = rows.filter((r) => r.group.pax > 0);
   const asked = planned.filter((r) => inputs[r.group.id]?.spec?.trim()).length;
   const guestCount = rows.reduce((n, r) => n + r.group.pax, 0);
   const messageCount = planned.filter((r) => r.message).length;
 
   return (
-    <div className="app karbala">
-      <header className="app-top">
-        <div className="app-top-inner">
-          <Brand />
-          {tabs}
-          {meta ? (
-            <div className="pulled">
-              <b>
-                From {dayMonth(meta.from)}
-                {meta.to ? ` to ${dayMonth(meta.to)}` : ''}
-              </b>
-              Pulled {ago(meta.fetchedAt)}
-              <span className="save-status" data-status={saveStatus} title="Karbala hotel pax and rooms are shared by every device">
-                {saveStatus === 'saving' ? ' · Saving…' : saveStatus === 'offline' ? ' · Not saved yet, retrying' : loaded ? ' · Saved for everyone' : ''}
-              </span>
-            </div>
-          ) : null}
-          {meta ? (
-            <div className="top-actions">
-              <a className="btn" href="#k-messages">
-                Hotel messages
-              </a>
-              <button className="btn" onClick={() => setPullOpen(true)} disabled={k.pulling}>
-                Pull again
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </header>
-      <main className="page">
-        {showPull ? (
-          <PullPanel
-            k={k}
-            server={server}
-            onClose={
-              dataset && !k.pulling
-                ? () => {
-                    setPullOpen(false);
-                    k.stop();
-                  }
-                : null
-            }
+    <Shell
+      tabs={tabs}
+      status={!showPull ? <PullStatus meta={meta} saveStatus={saveStatus} loaded={loaded} /> : null}
+      actions={
+        !showPull ? (
+          <button className="btn on-rail" type="button" onClick={() => setPullOpen(true)}>
+            <Icon name="refresh" />
+            Pull again
+          </button>
+        ) : null
+      }
+    >
+      {showPull ? (
+        <PullPanel
+          venue="karbala"
+          mode={k.pulling ? 'pulling' : k.error ? 'failed' : 'start'}
+          from={k.range.from}
+          to={k.range.to}
+          onFrom={(from) => k.setRange((r) => ({ from, to: r.to && r.to < from ? '' : r.to }))}
+          onTo={(to) => k.setRange((r) => ({ ...r, to }))}
+          onPull={() => k.pull()}
+          onStop={k.stop}
+          onBack={
+            dataset
+              ? () => {
+                  setPullOpen(false);
+                  k.stop();
+                }
+              : null
+          }
+          backLabel={meta ? `Back to the messages from ${dayMonth(meta.from)}` : null}
+          server={server}
+          progress={k.progress}
+          error={k.error}
+        />
+      ) : (
+        <>
+          <PageBar
+            title={`Karbala · ${rangeLabel(meta.from, meta.to ?? meta.through)}`}
+            sections={[
+              { id: 'k-groups', label: 'Groups', count: rows.length },
+              { id: 'k-messages', label: 'Hotel messages', count: messageCount },
+            ]}
           />
-        ) : null}
-
-        {dataset && meta && !k.pulling ? (
-          <>
+          <main className="page">
+            <div className="lead">
+              <p>
+                <b>
+                  {groupsText(planned.length)}, {guests(guestCount)}
+                </b>{' '}
+                who need a hotel. {messageCount} {messageCount === 1 ? 'message' : 'messages'} to send.
+              </p>
+              {meta.notApproved ? (
+                <p className="lead-note">
+                  <Icon name="clock" />
+                  {meta.notApproved} more {meta.notApproved === 1 ? 'tour' : 'tours'} in this period {meta.notApproved === 1 ? 'is' : 'are'} still pending in NKERP. They join once
+                  approved and pulled again.{' '}
+                  {meta.pending?.length ? (
+                    <button className="link" type="button" onClick={() => setShowPending(true)}>
+                      See the pending tours
+                    </button>
+                  ) : null}
+                </p>
+              ) : null}
+            </div>
             <TourAlerts meta={meta} />
             <PullChanges meta={meta} />
-            <section className="overview k-overview">
-              <div className="overview-head">
-                <h1>Karbala · {rangeLabel(meta.from, meta.to ?? meta.through)}</h1>
-                <p>
-                  {groupsText(planned.length)}, {guests(guestCount)} who need a hotel. {messageCount} {messageCount === 1 ? 'message' : 'messages'} below.
-                </p>
-                {meta.notApproved ? (
-                  <p className="overview-note">
-                    {meta.notApproved} more {meta.notApproved === 1 ? 'tour' : 'tours'} in this period {meta.notApproved === 1 ? 'is' : 'are'} still pending in NKERP. They
-                    join once approved and pulled again.{' '}
-                    {meta.pending?.length ? (
-                      <button className="linkish" onClick={() => setShowPending(true)}>
-                        See the pending tours
-                      </button>
-                    ) : null}
-                  </p>
-                ) : null}
-              </div>
-            </section>
 
             {rows.length ? (
               <>
-                <section className="block">
+                <section className="block" id="k-groups">
                   <div className="block-head">
-                    <h2>Groups</h2>
-                    <p>
-                      Edit hotel pax or rooms and the messages update automatically. Enter 0 to skip a tour. {asked} of {planned.length} groups with hotel pax have rooms typed.
-                      Use 2x6 for six 2-bed rooms.
-                    </p>
+                    <div>
+                      <h2>Groups</h2>
+                      <p>
+                        Edit hotel pax or rooms and the messages update by themselves. Enter 0 to skip a tour. Use 2x6 for six 2-bed rooms. {asked} of {planned.length}{' '}
+                        groups with hotel pax have rooms typed.
+                      </p>
+                    </div>
                   </div>
                   <GroupsTable rows={rows} meta={meta} inputs={inputs} onInput={k.onInput} changes={meta.reapprovals} />
                 </section>
 
                 <section className="block" id="k-messages">
                   <div className="block-head">
-                    <h2>Hotel messages</h2>
-                    <p>One message per group, by the day it checks in. Copy one, or every message for a day.</p>
+                    <div>
+                      <h2>Hotel messages</h2>
+                      <p>One message per group, by the day it checks in. Copy one, or every message for a day.</p>
+                    </div>
                   </div>
                   <Messages rows={rows} />
                 </section>
@@ -365,15 +283,15 @@ export function KarbalaView({ k, tabs, server, departureDayRule, saveStatus, loa
                 <p>No approved tour staying in Karbala in this range has guests who need a hotel. Pull again with other dates, or once more tours are approved in NKERP.</p>
               </div>
             )}
-          </>
-        ) : null}
-      </main>
+          </main>
+        </>
+      )}
 
       <AnimatePresence>
         {showPending && meta?.pending ? (
           <PendingTours key="pending" tours={meta.pending} meta={meta} inputs={k.typed} onEdit={k.onInput} city="Karbala" onClose={() => setShowPending(false)} />
         ) : null}
       </AnimatePresence>
-    </div>
+    </Shell>
   );
 }

@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { FieldChange, MonitorState, PullMeta, TourAlert } from '../../shared/types';
+import { plainDates } from './time';
 
 /** Per tour ID, the time of the last change someone marked seen (shared for everyone). */
 export type SeenAlerts = Record<string, string>;
@@ -56,4 +57,4 @@ export function unseenTours(meta: PullMeta | undefined, seen: SeenAlerts): Unsee
     .sort((a, b) => b.at.localeCompare(a.at) || a.tourNo.localeCompare(b.tourNo, undefined, { numeric: true }));
 }
 
-export const changeText = (c: FieldChange) => `${FIELD_LABEL[c.field]}: ${c.before} → ${c.after}`;
+export const changeText = (c: FieldChange) => `${FIELD_LABEL[c.field]}: ${plainDates(c.before)} → ${plainDates(c.after)}`;

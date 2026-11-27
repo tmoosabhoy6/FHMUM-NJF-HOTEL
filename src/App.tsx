@@ -1,12 +1,14 @@
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { OPENING_BALANCE, PLANNING_START, RUYA_WITHHELD, ruyaRooms } from '../shared/config';
-import { dayMonth, fullDate } from '../shared/dates';
+import { dayMonth } from '../shared/dates';
 import { buildPlan, hotelNames } from '../shared/engine';
 import type { Group, MonitorState, Settings } from '../shared/types';
 import { HotelMessages } from './components/HotelMessages';
+import { PullPanel } from './components/PullPanel';
 import { SettingsDrawer, type Prefs } from './components/SettingsDrawer';
-import { Brand, CityTabs, type PlannerTab } from './components/ui';
+import { PullStatus, Shell } from './components/Shell';
+import { CityTabs, Icon, type PlannerTab } from './components/ui';
 import { AlertsContext, type Alerts, type SeenAlerts } from './lib/alerts';
 import { exportPlan } from './lib/export';
 import { editInput, inputKey, legacyKey, tourInput, withHotelPax, type InputChange, type TourInputs } from './lib/inputs';
@@ -17,7 +19,6 @@ import { load, save } from './lib/storage';
 import { checkServer, emptyProgress, startPull, type PullProgress, type PullResult, type ServerState } from './lib/sync';
 import { ApprovalsView } from './screens/Approvals';
 import { KarbalaView } from './screens/Karbala';
-import { Night } from './screens/Night';
 import { PlanView } from './screens/PlanView';
 
 // v2: guests are counted person by person, and room requests are written bed size first.
@@ -26,15 +27,6 @@ const KEY = { data: 'njf.dataset.v2', inputs: 'njf.inputs.v2', prefs: 'njf.prefs
 const POLL_MS = 15_000;
 
 const DEFAULT_PREFS: Prefs = { arafCapacity: 100, departureDayRule: true, withheld: RUYA_WITHHELD };
-
-function ago(iso: string): string {
-  const minutes = Math.round((Date.now() - Date.parse(iso)) / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours} h ago`;
-  return fullDate(iso.slice(0, 10));
-}
 
 export function App() {
   const [savedDataset, setSavedDataset] = useState<PullResult | null>(() => {
@@ -218,7 +210,6 @@ export function App() {
   }), [seen, monitor, shared]);
 
   const names = settings.names ?? hotelNames();
-  const night = screen !== 'app';
   const flagged = plan?.totals.flagged ?? 0;
   const openPull = () => {
     setProgress(emptyProgress());
@@ -233,12 +224,12 @@ export function App() {
     setScreen(dataset ? 'app' : 'start');
     if (returnToApprovals.current) changeTab('approvals');
   };
-  const tabs = (dark = false) => <CityTabs tab={tab} onTab={changeTab} dark={dark} />;
+  const tabs = <CityTabs tab={tab} onTab={changeTab} />;
 
   if (tab === 'karbala') {
     return (
       <AlertsContext.Provider value={alerts}><NamesContext.Provider value={names}>
-        <KarbalaView k={karbala} tabs={tabs()} server={server} departureDayRule={prefs.departureDayRule} saveStatus={saveStatus} loaded={loaded} ago={ago} />
+        <KarbalaView k={karbala} tabs={tabs} server={server} departureDayRule={prefs.departureDayRule} saveStatus={saveStatus} loaded={loaded} />
       </NamesContext.Provider></AlertsContext.Provider>
     );
   }
@@ -247,7 +238,7 @@ export function App() {
     return (
       <AlertsContext.Provider value={alerts}><NamesContext.Provider value={names}>
         <ApprovalsView
-          tabs={tabs()}
+          tabs={tabs}
           dataset={savedDataset}
           inputs={typed}
           settings={settings}
@@ -264,66 +255,96 @@ export function App() {
     );
   }
 
+  const showPlan = screen === 'app' && dataset && plan;
   return (
     <AlertsContext.Provider value={alerts}><NamesContext.Provider value={names}>
-      {dataset && plan ? (
-        <div className="app" aria-hidden={night}>
-          <header className="app-top">
-            <div className="app-top-inner">
-              <Brand />
-              {tabs()}
-              <div className="pulled">
-                <b>
-                  From {dayMonth(dataset.meta.from)}
-                  {dataset.meta.to ? ` to ${dayMonth(dataset.meta.to)}` : ''}
-                </b>
-                Pulled {ago(dataset.meta.fetchedAt)}
-                <span className="save-status" data-status={saveStatus} title="Hotel pax, room requests and hotel choices are shared by every device">
-                  {sample ? ' · Sample only' : saveStatus === 'saving' ? ' · Saving…' : saveStatus === 'offline' ? ' · Not saved yet, retrying' : loaded ? ' · Saved for everyone' : ''}
-                </span>
-              </div>
-              <div className="top-actions">
-                <button className="btn" onClick={() => setPanel('messages')}>
-                  Hotel messages
-                </button>
-                <button className="btn" onClick={() => setPanel('settings')}>
-                  Hotels and rooms
-                </button>
-                <button
-                  className="btn"
-                  onClick={openPull}
-                >
-                  Pull again
-                </button>
-                <button
-                  className="btn solid"
-                  disabled={exporting || !groups.length}
-                  onClick={async () => {
-                    setExporting(true);
-                    try {
-                      await exportPlan(plan, groups, dataset.meta, names, activeInputs);
-                    } finally {
-                      setExporting(false);
-                    }
-                  }}
-                >
-                  {exporting ? 'Building the file' : 'Download Excel'}
-                </button>
-              </div>
-            </div>
-          </header>
-          {dataset.meta.source === 'sample' ? (
-            <div className="banner">Sample groups, not NKERP. Pull again to load the real tours.</div>
-          ) : null}
-
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }}>
-            <PlanView groups={groups} plan={plan} meta={dataset.meta} inputs={inputs} tourInputs={activeInputs} onInput={onInput} onOpenMessages={() => setPanel('messages')} />
-          </motion.div>
-          <span className="sr" aria-live="polite">
-            {flagged ? `${flagged} groups are not in ${names.ruya}.` : `Every group is in ${names.ruya}.`}
-          </span>
-        </div>
-      ) : null}
+      <Shell
+        tabs={tabs}
+        status={showPlan ? <PullStatus meta={dataset.meta} saveStatus={saveStatus} loaded={loaded} sample={Boolean(sample)} /> : null}
+        actions={
+          showPlan ? (
+            <>
+              <button className="btn on-rail" type="button" onClick={openPull}>
+                <Icon name="refresh" />
+                Pull again
+              </button>
+              <button className="btn on-rail" type="button" onClick={() => setPanel('settings')}>
+                <Icon name="sliders" />
+                Hotels and rooms
+              </button>
+            </>
+          ) : null
+        }
+        banner={
+          showPlan && dataset.meta.source === 'sample' ? (
+            <p className="banner">
+              <Icon name="alert" />
+              Sample groups, not NKERP. Pull again to load the real tours.
+            </p>
+          ) : null
+        }
+      >
+        {showPlan ? (
+          <>
+            <PlanView
+              groups={groups}
+              plan={plan}
+              meta={dataset.meta}
+              inputs={inputs}
+              tourInputs={activeInputs}
+              onInput={onInput}
+              actions={
+                <>
+                  <button className="btn" type="button" onClick={() => setPanel('messages')}>
+                    <Icon name="message" />
+                    Hotel messages
+                  </button>
+                  <button
+                    className="btn primary"
+                    type="button"
+                    disabled={exporting || !groups.length}
+                    onClick={async () => {
+                      setExporting(true);
+                      try {
+                        await exportPlan(plan, groups, dataset.meta, names, activeInputs);
+                      } finally {
+                        setExporting(false);
+                      }
+                    }}
+                  >
+                    <Icon name="download" />
+                    {exporting ? 'Building the file' : 'Download Excel'}
+                  </button>
+                </>
+              }
+            />
+            <span className="sr" aria-live="polite">
+              {flagged ? `${flagged} groups are not in ${names.ruya}.` : `Every group is in ${names.ruya}.`}
+            </span>
+          </>
+        ) : (
+          <PullPanel
+            venue="najaf"
+            mode={screen === 'pulling' ? 'pulling' : screen === 'failed' ? 'failed' : 'start'}
+            from={range.from}
+            to={range.to}
+            onFrom={(from) => changeRange({ from, to: range.to && range.to < from ? '' : range.to })}
+            onTo={(to) => changeRange({ ...range, to })}
+            onPull={pull}
+            onStop={() => {
+              cancel.current?.();
+              closePull();
+            }}
+            onBack={dataset ? closePull : null}
+            backLabel={dataset ? (returnToApprovals.current ? 'Back to approvals' : `Back to the plan from ${dayMonth(dataset.meta.from)}`) : null}
+            server={server}
+            source={source}
+            progress={progress}
+            error={screen === 'failed' ? error : null}
+            sample
+          />
+        )}
+      </Shell>
 
       <AnimatePresence>
         {panel === 'settings' ? (
@@ -347,31 +368,6 @@ export function App() {
           />
         ) : panel === 'messages' && plan ? (
           <HotelMessages key="messages" groups={groups} plan={plan} onClose={() => setPanel(null)} />
-        ) : null}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {night ? (
-          <Night
-            key="night"
-            tabs={tabs(true)}
-            mode={screen === 'pulling' ? 'pulling' : screen === 'failed' ? 'failed' : 'start'}
-            from={range.from}
-            to={range.to}
-            onFrom={(from) => changeRange({ from, to: range.to && range.to < from ? '' : range.to })}
-            onTo={(to) => changeRange({ ...range, to })}
-            onPull={pull}
-            onCancel={() => {
-              cancel.current?.();
-              closePull();
-            }}
-            onResume={dataset ? closePull : null}
-            resumeLabel={dataset ? (returnToApprovals.current ? 'Back to approvals' : `Back to the plan from ${dayMonth(dataset.meta.from)}`) : null}
-            server={server}
-            source={source}
-            progress={progress}
-            error={error}
-          />
         ) : null}
       </AnimatePresence>
     </NamesContext.Provider></AlertsContext.Provider>
