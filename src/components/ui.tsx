@@ -1,7 +1,8 @@
 import { animate, motion, useReducedMotion } from 'motion/react';
-import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import type { HotelId } from '../../shared/types';
 import { useNames } from '../lib/names';
+import { useHue } from '../lib/tags';
 
 /** A whole number that counts to its new value when it changes. */
 export function Num({ value }: { value: number }) {
@@ -93,19 +94,11 @@ export function CityTabs({ tab, onTab }: { tab: PlannerTab; onTab: (tab: Planner
 
 // ---- the tour tag ------------------------------------------------------------------------
 
-/** Twelve tag colours, as hues. A tour keeps its colour on every screen. */
-const HUES = [248, 20, 150, 300, 95, 205, 345, 125, 272, 48, 175, 322];
-export function tagHue(tourNo: string): number {
-  let h = 0;
-  for (const ch of tourNo) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return HUES[h % HUES.length];
-}
-export const hueStyle = (tourNo: string) => ({ '--h': tagHue(tourNo) }) as CSSProperties;
-
-/** A tour number as a luggage tag in that tour's colour. */
+/** A tour number as a luggage tag in that tour's colour (lib/tags.ts). */
 export function TourTag({ no, title }: { no: string; title?: string }) {
+  const hue = useHue();
   return (
-    <span className="tag" style={hueStyle(no)} title={title}>
+    <span className="tag" style={hue(no)} title={title}>
       {no}
     </span>
   );

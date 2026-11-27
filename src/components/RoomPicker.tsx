@@ -3,7 +3,8 @@ import { OPENING_BALANCE, RUYA_SHEET } from '../../shared/config';
 import { dayMonth, rangeLabel } from '../../shared/dates';
 import type { Group, Placement, Plan } from '../../shared/types';
 import { useNames } from '../lib/names';
-import { Drawer, hueStyle, Icon } from './ui';
+import { useHue } from '../lib/tags';
+import { Drawer, Icon } from './ui';
 
 interface Props {
   group: Group;
@@ -20,6 +21,7 @@ type Busy = { who: string; fixed: boolean; from: string; to: string };
 /** Choose a group's exact Ruya rooms. Rooms held by hand or from November cannot be taken; rooms the planner gave someone else can. */
 export function RoomPicker({ group, plan, groups, current, onChange, onClose }: Props) {
   const names = useNames();
+  const hue = useHue();
   const placement: Placement | undefined = plan.placements[group.id];
   const nights = placement?.nights ?? [];
   const [edited, setEdited] = useState(false);
@@ -88,7 +90,7 @@ export function RoomPicker({ group, plan, groups, current, onChange, onClose }: 
                       data-soft={Boolean(b && !b.fixed)}
                       disabled={blocked && !on}
                       aria-pressed={on}
-                      style={b && !out && b.who.startsWith('Tour ') ? hueStyle(b.who.replace('Tour ', '')) : undefined}
+                      style={b && !out && b.who.startsWith('Tour ') ? hue(b.who.replace('Tour ', '')) : undefined}
                       title={
                         out
                           ? `Room ${room.no}: not in the plan`

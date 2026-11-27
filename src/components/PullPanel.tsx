@@ -193,12 +193,14 @@ export function PullPanel(props: Props) {
                     ) : null}
                   </>
                 )}
-                {props.onBack ? (
-                  <button className="btn ghost lg" type="button" onClick={props.onBack}>
+              </div>
+              {props.onBack ? (
+                <p>
+                  <button className="link" type="button" onClick={props.onBack}>
                     {props.backLabel}
                   </button>
-                ) : null}
-              </div>
+                </p>
+              ) : null}
             </form>
           </>
         )}

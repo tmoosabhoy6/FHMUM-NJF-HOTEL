@@ -155,7 +155,6 @@ h1,
 h2,
 .tag,
 .hotel-sum dd b,
-.stats dd,
 .pull-tally dd,
 .occ-total {
   font-stretch: 84%;
@@ -501,6 +500,12 @@ input::placeholder {
   border-radius: 4px;
   font-size: var(--fs-1);
   font-weight: 600;
+}
+
+.flag[data-tone='sample'] {
+  background: var(--araf-soft);
+  color: var(--araf-ink);
+  white-space: nowrap;
 }
 
 .flag[data-tone='info'] {
@@ -1159,12 +1164,12 @@ button.occ-col:hover,
 .occ-total {
   position: relative;
   z-index: 3;
-  padding: 0 2px;
+  padding: 0 5px;
   border-radius: 3px;
   background: var(--surface);
   font-size: var(--fs-1);
   line-height: 1.35;
-  margin-bottom: 1px;
+  margin-bottom: 2px;
   color: var(--ink);
 }
 
@@ -1214,7 +1219,8 @@ button.occ-col:hover,
 
 .occ-x[data-fri='true'] b,
 .occ-x[data-fri='true'] small {
-  color: var(--rail);
+  color: var(--ink);
+  font-weight: 800;
 }
 
 .occ[data-dense='true'] .occ-total,
@@ -1450,16 +1456,26 @@ button.occ-col:hover,
 
 .meter {
   position: absolute;
-  inset: 5px 6px;
-  z-index: -1;
+  left: 12px;
+  right: 46px;
+  top: 50%;
+  height: 8px;
+  margin-top: -4px;
   border-radius: 4px;
+  background: var(--sunk);
   overflow: hidden;
 }
 
 .meter i {
   display: block;
   height: 100%;
-  background: var(--ruya-soft);
+  border-radius: 4px;
+  background: var(--ruya);
+}
+
+.meter-n {
+  display: inline-block;
+  min-width: 30px;
 }
 
 .sheet .total {
@@ -1536,7 +1552,7 @@ button.occ-col:hover,
 
 .day-row[data-fri='true'] .day-toggle,
 .capacity tr[data-fri='true'] .date {
-  color: var(--rail);
+  font-weight: 800;
 }
 
 .sheet tbody .day-row[data-month='true'] > * {
@@ -1620,7 +1636,13 @@ button.occ-col:hover,
 }
 
 .nd-empty {
-  color: var(--ink-3);
+  padding: 2px 2px 0;
+  color: var(--ink-2);
+}
+
+.nd-board,
+.nd-lists {
+  align-self: start;
 }
 
 /* rooms, floor by floor: one night, the picker and the settings */
@@ -2080,7 +2102,8 @@ small.room-list {
 
 .sb-date[data-fri='true'] b,
 .sb-date[data-fri='true'] small {
-  color: var(--rail);
+  color: var(--ink);
+  font-weight: 800;
 }
 
 .sb-band {
@@ -2210,6 +2233,10 @@ button.sb-bar.lane:hover {
   display: grid;
   gap: 16px;
   margin-top: 24px;
+}
+
+.pull-form > p {
+  font-size: var(--fs-3);
 }
 
 .pull-dates {
@@ -2683,11 +2710,24 @@ button.sb-bar.lane:hover {
   margin-left: auto;
 }
 
+.k-messages {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 4px 20px;
+  align-items: start;
+}
+
+.k-messages > .msg-note {
+  grid-column: 1 / -1;
+}
+
+.k-messages .msg-day {
+  padding-top: 12px;
+}
+
 .msg-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 10px;
-  align-items: start;
 }
 
 .msg {
@@ -2774,36 +2814,18 @@ button.sb-bar.lane:hover {
   line-height: 1.4;
 }
 
-.stats {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-bottom: 1px solid var(--line);
-}
-
-.stats > div {
-  padding: 14px 20px;
-}
-
-.stats > div + div {
-  border-left: 1px solid var(--line);
-}
-
-.stats dt {
-  font-size: var(--fs-2);
-  font-weight: 600;
+.summary {
+  margin-bottom: 16px;
+  max-width: 110ch;
+  font-size: var(--fs-4);
   color: var(--ink-2);
 }
 
-.stats dd {
-  font-size: var(--fs-6);
-  line-height: 1.2;
+.summary b {
+  color: var(--ink);
 }
 
-.stats small {
-  color: var(--ink-2);
-}
-
-.stats [data-hot='true'] dd {
+.summary .hot {
   color: var(--bad-ink);
 }
 
@@ -2915,13 +2937,11 @@ button.sb-bar.lane:hover {
     scrollbar-width: none;
   }
 
-  .hotels,
-  .stats {
+  .hotels {
     grid-template-columns: 1fr;
   }
 
-  .hotel-sum + .hotel-sum,
-  .stats > div + div {
+  .hotel-sum + .hotel-sum {
     border-left: 0;
     border-top: 1px solid var(--line);
   }
@@ -3012,7 +3032,7 @@ button.sb-bar.lane:hover {
     flex-basis: calc(100% - 80px);
   }
 
-  .msg-grid {
+  .k-messages {
     grid-template-columns: 1fr;
   }
 

@@ -59,7 +59,7 @@ export interface Section {
 }
 
 /** The bar that stays at the top while you work: the page title, links to its sections, and the page's actions. */
-export function PageBar({ title, sections = [], actions }: { title: string; sections?: Section[]; actions?: ReactNode }) {
+export function PageBar({ title, note, sections = [], actions }: { title: string; note?: string; sections?: Section[]; actions?: ReactNode }) {
   const [current, setCurrent] = useState(sections[0]?.id ?? '');
   const ids = sections.map((s) => s.id).join(' ');
   useEffect(() => {
@@ -71,6 +71,8 @@ export function PageBar({ title, sections = [], actions }: { title: string; sect
         const el = document.getElementById(id);
         if (el && el.getBoundingClientRect().top <= 140) active = id;
       }
+      // At the very bottom the last section is the one on screen, even if it is short.
+      if (window.scrollY > 0 && window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) active = list[list.length - 1];
       setCurrent(active);
     };
     onScroll();
@@ -81,6 +83,7 @@ export function PageBar({ title, sections = [], actions }: { title: string; sect
     <div className="pagebar">
       <div className="pagebar-inner">
         <h1>{title}</h1>
+        {note ? <span className="flag" data-tone="sample">{note}</span> : null}
         {sections.length ? (
           <nav className="jump" aria-label="Sections of this page">
             {sections.map((s) => (

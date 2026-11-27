@@ -11,10 +11,11 @@ import { RoomPicker } from '../components/RoomPicker';
 import { PageBar } from '../components/Shell';
 import { StayBoard } from '../components/StayBoard';
 import { ChangeBadge, PaxInput, PullChanges, ReapprovalBadge, TourAlerts, useChanged } from '../components/TourChanges';
-import { guests, groupsText, HotelChip, hueStyle, Icon, nightsText, Num, Segmented, TourTag } from '../components/ui';
+import { guests, groupsText, HotelChip, Icon, nightsText, Num, Segmented, TourTag } from '../components/ui';
 import { bookingRows, howText, legDetail } from '../lib/bookings';
 import type { InputChange, TourInputs } from '../lib/inputs';
 import { useNames } from '../lib/names';
+import { useHue } from '../lib/tags';
 
 interface Props {
   groups: Group[];
@@ -75,6 +76,7 @@ function HotelSummary({ plan }: { plan: Plan }) {
 
 function NightDetail({ day, plan, byId }: { day: DayRow; plan: Plan; byId: Map<string, Group> }) {
   const names = useNames();
+  const hue = useHue();
   const holdLabel = new Map(OPENING_BALANCE.map((h) => [h.id, h.label]));
   const occupant = new Map<string, string>();
   for (const id of day.hotels.ruya.groups) for (const room of plan.placements[id]?.rooms ?? []) occupant.set(room.label, id);
@@ -107,7 +109,7 @@ function NightDetail({ day, plan, byId }: { day: DayRow; plan: Plan; byId: Map<s
                     data-taken={Boolean(tourNo)}
                     data-held={Boolean(id && !tourNo)}
                     data-out={out}
-                    style={tourNo ? hueStyle(tourNo) : undefined}
+                    style={tourNo ? hue(tourNo) : undefined}
                     title={out ? `Room ${room.no}: not in the plan` : id ? `Room ${room.no}: ${name(id)}` : `Room ${room.no}: free`}
                   >
                     <b>{room.no}</b>
@@ -120,7 +122,7 @@ function NightDetail({ day, plan, byId }: { day: DayRow; plan: Plan; byId: Map<s
         ))}
       </div>
       <div className="nd-lists">
-        {HOTEL_ORDER.map((hotel) => {
+        {HOTEL_ORDER.filter((hotel) => day.hotels[hotel].groups.length).map((hotel) => {
           const ids = day.hotels[hotel].groups;
           return (
             <div key={hotel} className="nd-list" data-hotel={hotel}>
@@ -128,8 +130,7 @@ function NightDetail({ day, plan, byId }: { day: DayRow; plan: Plan; byId: Map<s
                 <HotelChip hotel={hotel} />
                 <span>{guests(day.hotels[hotel].pax)}</span>
               </div>
-              {ids.length ? (
-                <ul>
+              <ul>
                   {ids.map((id) => {
                     const g = byId.get(id);
                     const p = plan.placements[id];
@@ -145,13 +146,15 @@ function NightDetail({ day, plan, byId }: { day: DayRow; plan: Plan; byId: Map<s
                       </li>
                     );
                   })}
-                </ul>
-              ) : (
-                <p className="nd-empty">Nobody</p>
-              )}
+              </ul>
             </div>
           );
         })}
+        {HOTEL_ORDER.some((hotel) => !day.hotels[hotel].groups.length) ? (
+          <p className="nd-empty">
+            Nobody in {HOTEL_ORDER.filter((hotel) => !day.hotels[hotel].groups.length).map((hotel) => names[hotel]).join(' or ')}.
+          </p>
+        ) : null}
       </div>
     </div>
   );
@@ -234,7 +237,7 @@ function DailyTable({ plan, byId, open, onOpen }: { plan: Plan; byId: Map<string
                     <span className="meter" aria-hidden="true">
                       <i style={{ width: `${Math.min(100, (ruyaUsed / Math.max(1, plan.capacity.ruya)) * 100)}%` }} />
                     </span>
-                    {day.hotels.ruya.pax || '–'}
+                    <span className="meter-n">{day.hotels.ruya.pax || '–'}</span>
                   </td>
                   <td className="n cell" data-hotel="araf" data-on={day.hotels.araf.pax > 0}>
                     {day.hotels.araf.pax || '–'}
@@ -360,7 +363,7 @@ function RoomsCell({ group, input, placement, onInput }: { group: Group; input: 
   const typed = Boolean(input.spec?.trim());
   let read: { text: string; bad: boolean } | null = null;
   if (parsed.error) read = { text: parsed.error, bad: true };
-  else if (typed) read = { text: `${describeRooms(parsed.rooms)} = ${parsed.beds} beds`, bad: parsed.beds < group.pax };
+  else if (typed) read = { text: `${describeRooms(parsed.rooms)} = ${parsed.beds} beds${parsed.beds < group.pax ? ` for ${group.pax} guests` : ''}`, bad: parsed.beds < group.pax };
   else if (placement?.specSource === 'suggested' && placement.spec) read = { text: `Planned as ${describeRooms(placement.spec)}`, bad: false };
   return (
     <div className="rooms-cell" data-bad={read?.bad}>
@@ -503,7 +506,7 @@ function GroupsTable({ list, plan, meta, inputs, onInput, onPick, changes }: {
                         }}
                       >
                         {input.roomNos?.length ? <option value="rooms">{names.ruya}, rooms by hand</option> : null}
-                        <option value="">{hotel && !input.roomNos?.length ? names[hotel] : 'Let the planner decide'}</option>
+                        <option value="">{hotel && !input.roomNos?.length ? names[hotel] : 'Planner decides'}</option>
                         {HOTEL_ORDER.map((h) => (
                           <option key={h} value={h}>
                             Keep in {names[h]}
@@ -600,6 +603,7 @@ export function PlanView({ groups, plan, meta, inputs, tourInputs, onInput, acti
     <>
       <PageBar
         title={rangeLabel(plan.range.from, plan.range.to)}
+        note={meta.source === 'sample' ? 'Sample data' : undefined}
         sections={[
           { id: 'overview', label: 'Overview' },
           { id: 'daily', label: 'Daily plan' },

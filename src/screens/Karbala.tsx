@@ -30,7 +30,7 @@ interface Props {
 function RoomsInput({ row, spec, onInput }: { row: KarbalaRow; spec: string; onInput: Karbala['onInput'] }) {
   const parsed = parseRoomSpec(spec);
   const typed = Boolean(spec.trim());
-  const read = parsed.error ? { text: parsed.error, bad: true } : typed ? { text: `${describeRooms(parsed.rooms)} = ${parsed.beds} beds`, bad: parsed.beds < row.group.pax } : null;
+  const read = parsed.error ? { text: parsed.error, bad: true } : typed ? { text: `${describeRooms(parsed.rooms)} = ${parsed.beds} beds${parsed.beds < row.group.pax ? ` for ${row.group.pax} guests` : ''}`, bad: parsed.beds < row.group.pax } : null;
   return (
     <div className="rooms-cell" data-bad={read?.bad}>
       <input

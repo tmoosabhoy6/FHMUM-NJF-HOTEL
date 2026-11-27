@@ -14,6 +14,7 @@ import { exportPlan } from './lib/export';
 import { editInput, inputKey, legacyKey, tourInput, withHotelPax, type InputChange, type TourInputs } from './lib/inputs';
 import { useKarbala } from './lib/karbala';
 import { NamesContext } from './lib/names';
+import { assignHues, TagContext } from './lib/tags';
 import { SharedState, type SaveStatus, type Values } from './lib/shared';
 import { load, save } from './lib/storage';
 import { checkServer, emptyProgress, startPull, type PullProgress, type PullResult, type ServerState } from './lib/sync';
@@ -210,6 +211,17 @@ export function App() {
   }), [seen, monitor, shared]);
 
   const names = settings.names ?? hotelNames();
+  // A tour keeps one tag colour on every tab, so the colours come from every tour pulled for either city.
+  const tagHues = useMemo(
+    () =>
+      assignHues([
+        ...[...(dataset?.groups ?? []), ...(karbala.dataset?.groups ?? [])].map((g) => ({ tourNo: g.tourNo, from: g.checkIn, to: g.checkOut })),
+        ...[...(dataset?.meta.pending ?? []), ...(karbala.dataset?.meta.pending ?? [])]
+          .filter((t) => t.start && t.end)
+          .map((t) => ({ tourNo: t.tourNo, from: t.start as string, to: t.end as string })),
+      ]),
+    [dataset, karbala.dataset],
+  );
   const flagged = plan?.totals.flagged ?? 0;
   const openPull = () => {
     setProgress(emptyProgress());
@@ -228,15 +240,15 @@ export function App() {
 
   if (tab === 'karbala') {
     return (
-      <AlertsContext.Provider value={alerts}><NamesContext.Provider value={names}>
+      <AlertsContext.Provider value={alerts}><NamesContext.Provider value={names}><TagContext.Provider value={tagHues}>
         <KarbalaView k={karbala} tabs={tabs} server={server} departureDayRule={prefs.departureDayRule} saveStatus={saveStatus} loaded={loaded} />
-      </NamesContext.Provider></AlertsContext.Provider>
+      </TagContext.Provider></NamesContext.Provider></AlertsContext.Provider>
     );
   }
 
   if (tab === 'approvals') {
     return (
-      <AlertsContext.Provider value={alerts}><NamesContext.Provider value={names}>
+      <AlertsContext.Provider value={alerts}><NamesContext.Provider value={names}><TagContext.Provider value={tagHues}>
         <ApprovalsView
           tabs={tabs}
           dataset={savedDataset}
@@ -251,13 +263,13 @@ export function App() {
             openPull();
           }}
         />
-      </NamesContext.Provider></AlertsContext.Provider>
+      </TagContext.Provider></NamesContext.Provider></AlertsContext.Provider>
     );
   }
 
   const showPlan = screen === 'app' && dataset && plan;
   return (
-    <AlertsContext.Provider value={alerts}><NamesContext.Provider value={names}>
+    <AlertsContext.Provider value={alerts}><NamesContext.Provider value={names}><TagContext.Provider value={tagHues}>
       <Shell
         tabs={tabs}
         status={showPlan ? <PullStatus meta={dataset.meta} saveStatus={saveStatus} loaded={loaded} sample={Boolean(sample)} /> : null}
@@ -370,6 +382,6 @@ export function App() {
           <HotelMessages key="messages" groups={groups} plan={plan} onClose={() => setPanel(null)} />
         ) : null}
       </AnimatePresence>
-    </NamesContext.Provider></AlertsContext.Provider>
+    </TagContext.Provider></NamesContext.Provider></AlertsContext.Provider>
   );
 }

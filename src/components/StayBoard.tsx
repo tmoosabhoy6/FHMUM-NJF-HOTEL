@@ -3,7 +3,8 @@ import { OPENING_BALANCE, RUYA_SHEET } from '../../shared/config';
 import { dayNumber, monthShort, rangeLabel, weekdayShort } from '../../shared/dates';
 import type { Group, HotelId, Plan } from '../../shared/types';
 import { useNames } from '../lib/names';
-import { guests, hueStyle, TourTag } from './ui';
+import { useHue } from '../lib/tags';
+import { guests, TourTag } from './ui';
 
 interface Bar {
   id: string;
@@ -19,6 +20,7 @@ interface Bar {
 /** Every Ruya room against every night: each tour's stay is a bar in its tag colour. Groups in the other hotels follow, one row each. */
 export function StayBoard({ plan, byId, onPick }: { plan: Plan; byId: Map<string, Group>; onPick: (groupId: string) => void }) {
   const names = useNames();
+  const hue = useHue();
   const dates = useMemo(() => plan.days.map((d) => d.date), [plan.days]);
   const { byRoom, lanes } = useMemo(() => {
     const col = new Map(dates.map((d, i) => [d, i]));
@@ -90,7 +92,7 @@ export function StayBoard({ plan, byId, onPick }: { plan: Plan; byId: Map<string
                           key={bar.id}
                           type="button"
                           className="sb-bar"
-                          style={{ gridColumn: `${bar.start + 1} / span ${bar.span}`, ...hueStyle(bar.label) }}
+                          style={{ gridColumn: `${bar.start + 1} / span ${bar.span}`, ...hue(bar.label) }}
                           title={`Tour ${bar.label} · ${bar.group.leader || 'no leader'} · ${guests(bar.pax)} · ${stay(bar)}. Click to choose its rooms.`}
                           onClick={() => onPick(bar.id)}
                         >

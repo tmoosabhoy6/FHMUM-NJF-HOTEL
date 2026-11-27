@@ -190,7 +190,7 @@ function DailyCapacity({ plan }: { plan: ApprovalPlan }) {
                   <span className="meter" aria-hidden="true">
                     <i style={{ width: `${Math.min(100, (pax / Math.max(1, plan.capacity)) * 100)}%` }} />
                   </span>
-                  {pax || '–'}
+                  <span className="meter-n">{pax || '–'}</span>
                 </td>
                 <td className="n free" data-low={day.fixedRoomConflict || plan.capacity - day.ruyaBedsUsed <= 0}>
                   {day.fixedRoomConflict ? 'Review committed rooms' : Math.max(0, plan.capacity - day.ruyaBedsUsed)}
@@ -350,36 +350,25 @@ function Planner({ dataset, inputs, settings, onEditPax }: { dataset: PullResult
                     Showing the best feasible plan found within the search limit.
                   </p>
                 )}
+                <p className="summary">
+                  <b>
+                    {plan.ruyaTours} pending {plan.ruyaTours === 1 ? 'tour fits' : 'tours fit'} in {names.ruya}
+                  </b>
+                  , {plan.arafTours} {plan.arafTours === 1 ? 'goes' : 'go'} to {names.araf} and {plan.overflowTours} to {names.c}.{' '}
+                  {plan.heldTours ? (
+                    <b className="hot">
+                      {plan.heldTours} {plan.heldTours === 1 ? 'tour needs' : 'tours need'} review.
+                    </b>
+                  ) : (
+                    'Nothing is held back for review.'
+                  )}{' '}
+                  {names.ruya} would carry {plan.fixedGuestNights + plan.ruyaGuestNights} guest-nights ({plan.fixedGuestNights} committed, {plan.ruyaGuestNights} proposed) on{' '}
+                  {plan.capacity} beds.
+                </p>
                 <TourAlerts meta={meta} />
                 <PullChanges meta={meta} />
                 <section className="block" id="a-overview" aria-label="Overview">
                   <div className="panel">
-                    <dl className="stats">
-                      <div>
-                        <dt>{names.ruya} guest-nights</dt>
-                        <dd>{plan.fixedGuestNights + plan.ruyaGuestNights}</dd>
-                        <small>
-                          {plan.fixedGuestNights} committed + {plan.ruyaGuestNights} proposed
-                        </small>
-                      </div>
-                      <div>
-                        <dt>Pending tours in {names.ruya}</dt>
-                        <dd>{plan.ruyaTours}</dd>
-                        <small>{plan.capacity} beds in service</small>
-                      </div>
-                      <div>
-                        <dt>Pending tours in other hotels</dt>
-                        <dd>{plan.arafTours + plan.overflowTours}</dd>
-                        <small>
-                          {plan.arafTours} {names.araf} · {plan.overflowTours} {names.c}
-                        </small>
-                      </div>
-                      <div data-hot={plan.heldTours > 0}>
-                        <dt>Tours to review</dt>
-                        <dd>{plan.heldTours}</dd>
-                        <small>{plan.heldTours ? 'See the review notes below' : 'Nothing held back'}</small>
-                      </div>
-                    </dl>
                     <Occupancy
                       series={[
                         { id: 'ruya', label: `Committed ${names.ruya}` },
