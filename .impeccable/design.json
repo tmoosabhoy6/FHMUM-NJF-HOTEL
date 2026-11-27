@@ -1,0 +1,842 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-27T23:52:35Z",
+  "title": "Design System: FH-MUM NJF Hotel Accommodation Planner",
+  "extensions": {
+    "colorMeta": {
+      "rail": {
+        "role": "primary",
+        "displayName": "Ultramarine Rail",
+        "canonical": "oklch(41% 0.19 272)",
+        "tonalRamp": [
+          "oklch(15% 0.086 272)",
+          "oklch(27% 0.143 272)",
+          "oklch(39% 0.18 272)",
+          "oklch(51% 0.19 272)",
+          "oklch(63% 0.19 272)",
+          "oklch(75% 0.162 272)",
+          "oklch(87% 0.095 272)",
+          "oklch(95% 0.042 272)"
+        ]
+      },
+      "rail-deep": {
+        "role": "primary",
+        "displayName": "Deep Ultramarine",
+        "canonical": "oklch(33% 0.17 272)",
+        "tonalRamp": [
+          "oklch(15% 0.077 272)",
+          "oklch(27% 0.128 272)",
+          "oklch(39% 0.162 272)",
+          "oklch(51% 0.17 272)",
+          "oklch(63% 0.17 272)",
+          "oklch(75% 0.145 272)",
+          "oklch(87% 0.085 272)",
+          "oklch(95% 0.037 272)"
+        ]
+      },
+      "rail-ink": {
+        "role": "primary",
+        "displayName": "Rail Ink",
+        "canonical": "oklch(100% 0 0)",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(27% 0 0)",
+          "oklch(39% 0 0)",
+          "oklch(51% 0 0)",
+          "oklch(63% 0 0)",
+          "oklch(75% 0 0)",
+          "oklch(87% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "rail-ink-2": {
+        "role": "primary",
+        "displayName": "Rail Ink 2",
+        "canonical": "oklch(87% 0.06 272)",
+        "tonalRamp": [
+          "oklch(15% 0.027 272)",
+          "oklch(27% 0.045 272)",
+          "oklch(39% 0.057 272)",
+          "oklch(51% 0.06 272)",
+          "oklch(63% 0.06 272)",
+          "oklch(75% 0.051 272)",
+          "oklch(87% 0.03 272)",
+          "oklch(95% 0.013 272)"
+        ]
+      },
+      "rail-line": {
+        "role": "primary",
+        "displayName": "Rail Outline",
+        "canonical": "oklch(100% 0 0 / 0.3)",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(27% 0 0)",
+          "oklch(39% 0 0)",
+          "oklch(51% 0 0)",
+          "oklch(63% 0 0)",
+          "oklch(75% 0 0)",
+          "oklch(87% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "rail-wash": {
+        "role": "primary",
+        "displayName": "Rail Wash",
+        "canonical": "oklch(100% 0 0 / 0.13)",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(27% 0 0)",
+          "oklch(39% 0 0)",
+          "oklch(51% 0 0)",
+          "oklch(63% 0 0)",
+          "oklch(75% 0 0)",
+          "oklch(87% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "ruya": {
+        "role": "secondary",
+        "displayName": "Ruya Teal",
+        "canonical": "oklch(57% 0.115 185)",
+        "tonalRamp": [
+          "oklch(15% 0.052 185)",
+          "oklch(27% 0.086 185)",
+          "oklch(39% 0.109 185)",
+          "oklch(51% 0.115 185)",
+          "oklch(63% 0.115 185)",
+          "oklch(75% 0.098 185)",
+          "oklch(87% 0.058 185)",
+          "oklch(95% 0.025 185)"
+        ]
+      },
+      "ruya-soft": {
+        "role": "secondary",
+        "displayName": "Ruya Tint",
+        "canonical": "oklch(93.5% 0.045 185)",
+        "tonalRamp": [
+          "oklch(15% 0.02 185)",
+          "oklch(27% 0.034 185)",
+          "oklch(39% 0.043 185)",
+          "oklch(51% 0.045 185)",
+          "oklch(63% 0.045 185)",
+          "oklch(75% 0.038 185)",
+          "oklch(87% 0.022 185)",
+          "oklch(95% 0.01 185)"
+        ]
+      },
+      "ruya-ink": {
+        "role": "secondary",
+        "displayName": "Ruya Ink",
+        "canonical": "oklch(35% 0.08 185)",
+        "tonalRamp": [
+          "oklch(15% 0.036 185)",
+          "oklch(27% 0.06 185)",
+          "oklch(39% 0.076 185)",
+          "oklch(51% 0.08 185)",
+          "oklch(63% 0.08 185)",
+          "oklch(75% 0.068 185)",
+          "oklch(87% 0.04 185)",
+          "oklch(95% 0.018 185)"
+        ]
+      },
+      "araf": {
+        "role": "secondary",
+        "displayName": "Araf Amber",
+        "canonical": "oklch(77% 0.155 78)",
+        "tonalRamp": [
+          "oklch(15% 0.07 78)",
+          "oklch(27% 0.116 78)",
+          "oklch(39% 0.147 78)",
+          "oklch(51% 0.155 78)",
+          "oklch(63% 0.155 78)",
+          "oklch(75% 0.132 78)",
+          "oklch(87% 0.077 78)",
+          "oklch(95% 0.034 78)"
+        ]
+      },
+      "araf-soft": {
+        "role": "secondary",
+        "displayName": "Araf Tint",
+        "canonical": "oklch(94.5% 0.06 88)",
+        "tonalRamp": [
+          "oklch(15% 0.027 88)",
+          "oklch(27% 0.045 88)",
+          "oklch(39% 0.057 88)",
+          "oklch(51% 0.06 88)",
+          "oklch(63% 0.06 88)",
+          "oklch(75% 0.051 88)",
+          "oklch(87% 0.03 88)",
+          "oklch(95% 0.013 88)"
+        ]
+      },
+      "araf-ink": {
+        "role": "secondary",
+        "displayName": "Araf Ink",
+        "canonical": "oklch(40% 0.09 70)",
+        "tonalRamp": [
+          "oklch(15% 0.041 70)",
+          "oklch(27% 0.068 70)",
+          "oklch(39% 0.085 70)",
+          "oklch(51% 0.09 70)",
+          "oklch(63% 0.09 70)",
+          "oklch(75% 0.076 70)",
+          "oklch(87% 0.045 70)",
+          "oklch(95% 0.02 70)"
+        ]
+      },
+      "c": {
+        "role": "secondary",
+        "displayName": "Hotel C Raspberry",
+        "canonical": "oklch(58% 0.2 8)",
+        "tonalRamp": [
+          "oklch(15% 0.09 8)",
+          "oklch(27% 0.15 8)",
+          "oklch(39% 0.19 8)",
+          "oklch(51% 0.2 8)",
+          "oklch(63% 0.2 8)",
+          "oklch(75% 0.17 8)",
+          "oklch(87% 0.1 8)",
+          "oklch(95% 0.044 8)"
+        ]
+      },
+      "c-soft": {
+        "role": "secondary",
+        "displayName": "Hotel C Tint",
+        "canonical": "oklch(94.5% 0.035 8)",
+        "tonalRamp": [
+          "oklch(15% 0.016 8)",
+          "oklch(27% 0.026 8)",
+          "oklch(39% 0.033 8)",
+          "oklch(51% 0.035 8)",
+          "oklch(63% 0.035 8)",
+          "oklch(75% 0.03 8)",
+          "oklch(87% 0.018 8)",
+          "oklch(95% 0.008 8)"
+        ]
+      },
+      "c-ink": {
+        "role": "secondary",
+        "displayName": "Hotel C Ink",
+        "canonical": "oklch(40% 0.15 8)",
+        "tonalRamp": [
+          "oklch(15% 0.068 8)",
+          "oklch(27% 0.112 8)",
+          "oklch(39% 0.142 8)",
+          "oklch(51% 0.15 8)",
+          "oklch(63% 0.15 8)",
+          "oklch(75% 0.128 8)",
+          "oklch(87% 0.075 8)",
+          "oklch(95% 0.033 8)"
+        ]
+      },
+      "tag-bg": {
+        "role": "tertiary",
+        "displayName": "Tag Tint",
+        "canonical": "oklch(90.5% 0.08 272)",
+        "tonalRamp": [
+          "oklch(15% 0.036 272)",
+          "oklch(27% 0.06 272)",
+          "oklch(39% 0.076 272)",
+          "oklch(51% 0.08 272)",
+          "oklch(63% 0.08 272)",
+          "oklch(75% 0.068 272)",
+          "oklch(87% 0.04 272)",
+          "oklch(95% 0.018 272)"
+        ]
+      },
+      "tag-line": {
+        "role": "tertiary",
+        "displayName": "Tag Line",
+        "canonical": "oklch(72% 0.125 272)",
+        "tonalRamp": [
+          "oklch(15% 0.056 272)",
+          "oklch(27% 0.094 272)",
+          "oklch(39% 0.119 272)",
+          "oklch(51% 0.125 272)",
+          "oklch(63% 0.125 272)",
+          "oklch(75% 0.106 272)",
+          "oklch(87% 0.062 272)",
+          "oklch(95% 0.028 272)"
+        ]
+      },
+      "tag-ink": {
+        "role": "tertiary",
+        "displayName": "Tag Ink",
+        "canonical": "oklch(29% 0.125 272)",
+        "tonalRamp": [
+          "oklch(15% 0.056 272)",
+          "oklch(27% 0.094 272)",
+          "oklch(39% 0.119 272)",
+          "oklch(51% 0.125 272)",
+          "oklch(63% 0.125 272)",
+          "oklch(75% 0.106 272)",
+          "oklch(87% 0.062 272)",
+          "oklch(95% 0.028 272)"
+        ]
+      },
+      "info-soft": {
+        "role": "tertiary",
+        "displayName": "Changed Wash",
+        "canonical": "oklch(95% 0.03 272)",
+        "tonalRamp": [
+          "oklch(15% 0.013 272)",
+          "oklch(27% 0.022 272)",
+          "oklch(39% 0.028 272)",
+          "oklch(51% 0.03 272)",
+          "oklch(63% 0.03 272)",
+          "oklch(75% 0.025 272)",
+          "oklch(87% 0.015 272)",
+          "oklch(95% 0.007 272)"
+        ]
+      },
+      "info-line": {
+        "role": "tertiary",
+        "displayName": "Changed Line",
+        "canonical": "oklch(84% 0.07 272)",
+        "tonalRamp": [
+          "oklch(15% 0.032 272)",
+          "oklch(27% 0.053 272)",
+          "oklch(39% 0.067 272)",
+          "oklch(51% 0.07 272)",
+          "oklch(63% 0.07 272)",
+          "oklch(75% 0.06 272)",
+          "oklch(87% 0.035 272)",
+          "oklch(95% 0.015 272)"
+        ]
+      },
+      "bad": {
+        "role": "tertiary",
+        "displayName": "Problem Red",
+        "canonical": "oklch(55% 0.2 27)",
+        "tonalRamp": [
+          "oklch(15% 0.09 27)",
+          "oklch(27% 0.15 27)",
+          "oklch(39% 0.19 27)",
+          "oklch(51% 0.2 27)",
+          "oklch(63% 0.2 27)",
+          "oklch(75% 0.17 27)",
+          "oklch(87% 0.1 27)",
+          "oklch(95% 0.044 27)"
+        ]
+      },
+      "bad-soft": {
+        "role": "tertiary",
+        "displayName": "Problem Tint",
+        "canonical": "oklch(95.5% 0.03 27)",
+        "tonalRamp": [
+          "oklch(15% 0.013 27)",
+          "oklch(27% 0.022 27)",
+          "oklch(39% 0.028 27)",
+          "oklch(51% 0.03 27)",
+          "oklch(63% 0.03 27)",
+          "oklch(75% 0.025 27)",
+          "oklch(87% 0.015 27)",
+          "oklch(95% 0.007 27)"
+        ]
+      },
+      "bad-ink": {
+        "role": "tertiary",
+        "displayName": "Problem Ink",
+        "canonical": "oklch(43% 0.17 27)",
+        "tonalRamp": [
+          "oklch(15% 0.077 27)",
+          "oklch(27% 0.128 27)",
+          "oklch(39% 0.162 27)",
+          "oklch(51% 0.17 27)",
+          "oklch(63% 0.17 27)",
+          "oklch(75% 0.145 27)",
+          "oklch(87% 0.085 27)",
+          "oklch(95% 0.037 27)"
+        ]
+      },
+      "caution": {
+        "role": "tertiary",
+        "displayName": "Caution Orange",
+        "canonical": "oklch(62% 0.17 50)",
+        "tonalRamp": [
+          "oklch(15% 0.077 50)",
+          "oklch(27% 0.128 50)",
+          "oklch(39% 0.162 50)",
+          "oklch(51% 0.17 50)",
+          "oklch(63% 0.17 50)",
+          "oklch(75% 0.145 50)",
+          "oklch(87% 0.085 50)",
+          "oklch(95% 0.037 50)"
+        ]
+      },
+      "ok": {
+        "role": "tertiary",
+        "displayName": "Done Green",
+        "canonical": "oklch(52% 0.14 152)",
+        "tonalRamp": [
+          "oklch(15% 0.063 152)",
+          "oklch(27% 0.105 152)",
+          "oklch(39% 0.133 152)",
+          "oklch(51% 0.14 152)",
+          "oklch(63% 0.14 152)",
+          "oklch(75% 0.119 152)",
+          "oklch(87% 0.07 152)",
+          "oklch(95% 0.031 152)"
+        ]
+      },
+      "canvas": {
+        "role": "neutral",
+        "displayName": "Blue-White Canvas",
+        "canonical": "oklch(97.3% 0.008 272)",
+        "tonalRamp": [
+          "oklch(15% 0.004 272)",
+          "oklch(27% 0.006 272)",
+          "oklch(39% 0.008 272)",
+          "oklch(51% 0.008 272)",
+          "oklch(63% 0.008 272)",
+          "oklch(75% 0.007 272)",
+          "oklch(87% 0.004 272)",
+          "oklch(95% 0.002 272)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "White",
+        "canonical": "oklch(100% 0 0)",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(27% 0 0)",
+          "oklch(39% 0 0)",
+          "oklch(51% 0 0)",
+          "oklch(63% 0 0)",
+          "oklch(75% 0 0)",
+          "oklch(87% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "sunk": {
+        "role": "neutral",
+        "displayName": "Sunk",
+        "canonical": "oklch(95.6% 0.011 272)",
+        "tonalRamp": [
+          "oklch(15% 0.005 272)",
+          "oklch(27% 0.008 272)",
+          "oklch(39% 0.01 272)",
+          "oklch(51% 0.011 272)",
+          "oklch(63% 0.011 272)",
+          "oklch(75% 0.009 272)",
+          "oklch(87% 0.005 272)",
+          "oklch(95% 0.002 272)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Line",
+        "canonical": "oklch(90.5% 0.014 272)",
+        "tonalRamp": [
+          "oklch(15% 0.006 272)",
+          "oklch(27% 0.011 272)",
+          "oklch(39% 0.013 272)",
+          "oklch(51% 0.014 272)",
+          "oklch(63% 0.014 272)",
+          "oklch(75% 0.012 272)",
+          "oklch(87% 0.007 272)",
+          "oklch(95% 0.003 272)"
+        ]
+      },
+      "line-strong": {
+        "role": "neutral",
+        "displayName": "Strong Line",
+        "canonical": "oklch(81% 0.022 272)",
+        "tonalRamp": [
+          "oklch(15% 0.01 272)",
+          "oklch(27% 0.017 272)",
+          "oklch(39% 0.021 272)",
+          "oklch(51% 0.022 272)",
+          "oklch(63% 0.022 272)",
+          "oklch(75% 0.019 272)",
+          "oklch(87% 0.011 272)",
+          "oklch(95% 0.005 272)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(23% 0.045 272)",
+        "tonalRamp": [
+          "oklch(15% 0.02 272)",
+          "oklch(27% 0.034 272)",
+          "oklch(39% 0.043 272)",
+          "oklch(51% 0.045 272)",
+          "oklch(63% 0.045 272)",
+          "oklch(75% 0.038 272)",
+          "oklch(87% 0.022 272)",
+          "oklch(95% 0.01 272)"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Ink 2",
+        "canonical": "oklch(42% 0.035 272)",
+        "tonalRamp": [
+          "oklch(15% 0.016 272)",
+          "oklch(27% 0.026 272)",
+          "oklch(39% 0.033 272)",
+          "oklch(51% 0.035 272)",
+          "oklch(63% 0.035 272)",
+          "oklch(75% 0.03 272)",
+          "oklch(87% 0.018 272)",
+          "oklch(95% 0.008 272)"
+        ]
+      },
+      "ink-3": {
+        "role": "neutral",
+        "displayName": "Ink 3",
+        "canonical": "oklch(51% 0.03 272)",
+        "tonalRamp": [
+          "oklch(15% 0.013 272)",
+          "oklch(27% 0.022 272)",
+          "oklch(39% 0.028 272)",
+          "oklch(51% 0.03 272)",
+          "oklch(63% 0.03 272)",
+          "oklch(75% 0.025 272)",
+          "oklch(87% 0.015 272)",
+          "oklch(95% 0.007 272)"
+        ]
+      },
+      "scrim": {
+        "role": "neutral",
+        "displayName": "Scrim",
+        "canonical": "oklch(23% 0.045 272 / 0.4)",
+        "tonalRamp": [
+          "oklch(15% 0.02 272)",
+          "oklch(27% 0.034 272)",
+          "oklch(39% 0.043 272)",
+          "oklch(51% 0.045 272)",
+          "oklch(63% 0.045 272)",
+          "oklch(75% 0.038 272)",
+          "oklch(87% 0.022 272)",
+          "oklch(95% 0.01 272)"
+        ]
+      },
+      "shadow": {
+        "role": "neutral",
+        "displayName": "Shadow",
+        "canonical": "oklch(23% 0.045 272 / 0.18)",
+        "tonalRamp": [
+          "oklch(15% 0.02 272)",
+          "oklch(27% 0.034 272)",
+          "oklch(39% 0.043 272)",
+          "oklch(51% 0.045 272)",
+          "oklch(63% 0.045 272)",
+          "oklch(75% 0.038 272)",
+          "oklch(87% 0.022 272)",
+          "oklch(95% 0.01 272)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Hotel totals, approval stats, the pull tally and the pull screen heading. Narrow bold."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page-bar title, section headings and side-panel titles. Narrow bold."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Hotel names in the summary, settings and message-day headings. Normal width."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Page default and field text."
+      },
+      "table": {
+        "displayName": "Table",
+        "purpose": "Table cells, list rows and notices; buttons, tabs and field labels at weight 600."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Buttons, tabs, section links and field labels."
+      },
+      "caption": {
+        "displayName": "Caption",
+        "purpose": "Table headers, notes, counts and chart axes. The smallest size allowed."
+      },
+      "tag": {
+        "displayName": "Tag",
+        "purpose": "Tour numbers on tags and stay bars. Narrow bold, line-height 1."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "Hotel message text as it will be pasted, and inline codes."
+      }
+    },
+    "tagHues": {
+      "values": [
+        248,
+        20,
+        150,
+        300,
+        95,
+        205,
+        345,
+        125,
+        272,
+        48,
+        175,
+        322
+      ],
+      "recipe": {
+        "bg": "oklch(90.5% 0.08 H)",
+        "line": "oklch(72% 0.125 H)",
+        "ink": "oklch(29% 0.125 H)"
+      },
+      "source": "tagHue(tourNo) in src/components/ui.tsx: a hash of the tour number picks the hue, set as --h on the element."
+    },
+    "shadows": [
+      {
+        "name": "side-panel",
+        "value": "-18px 0 48px -18px var(--shadow)",
+        "purpose": "The drawer over the scrim. The only overlay shadow."
+      },
+      {
+        "name": "segment-selected",
+        "value": "0 1px 2px var(--shadow)",
+        "purpose": "The raised pill of the pressed option in a segmented control."
+      },
+      {
+        "name": "stay-bar-hover",
+        "value": "0 2px 6px -2px var(--shadow)",
+        "purpose": "Hover feedback on a clickable stay bar."
+      },
+      {
+        "name": "field-focus",
+        "value": "0 0 0 3px var(--info-soft)",
+        "purpose": "Focus ring on inputs and selects, with a rail border."
+      },
+      {
+        "name": "focus-outline",
+        "value": "outline: 2px solid var(--rail); outline-offset: 2px",
+        "purpose": "Keyboard focus on everything else; white on the rail."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "The one easing curve (--ease), for reveals, chevrons and the side panel."
+      },
+      {
+        "name": "state-colour",
+        "value": "150ms",
+        "purpose": "Background, border and text colour on hover, press and selection."
+      },
+      {
+        "name": "chevron",
+        "value": "180ms",
+        "purpose": "Disclosure chevrons turning; also the scrim fade."
+      },
+      {
+        "name": "night-reveal",
+        "value": "220ms",
+        "purpose": "A night row opening in place (fade with a top-down clip)."
+      },
+      {
+        "name": "side-panel",
+        "value": "260ms",
+        "purpose": "The drawer sliding in from the right."
+      },
+      {
+        "name": "pull-day",
+        "value": "300ms",
+        "purpose": "A day cell filling as the pull reads it."
+      },
+      {
+        "name": "count-up",
+        "value": "500ms",
+        "purpose": "A total counting to its new value."
+      },
+      {
+        "name": "saving-pulse",
+        "value": "1s ease-in-out infinite",
+        "purpose": "The rail status dot while edits are saving."
+      },
+      {
+        "name": "active-step-ring",
+        "value": "1.4s infinite",
+        "purpose": "The current step while a pull is running."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "prefers-reduced-motion: reduce",
+        "purpose": "Loops, reveals, slides and count-ups stop; colour changes stay."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "page",
+        "value": "1440px"
+      },
+      {
+        "name": "narrow",
+        "value": "1180px"
+      },
+      {
+        "name": "phone",
+        "value": "760px"
+      },
+      {
+        "name": "touch",
+        "value": "pointer: coarse"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one primary action in a page bar or on the pull screen.",
+      "html": "<button class=\"ds-btn ds-btn-primary\" type=\"button\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3\"/></svg>Pull from NKERP</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--r-2); background: var(--surface); color: var(--ink); font-family: var(--font); font-variant-numeric: tabular-nums; font-size: var(--fs-2); font-weight: 600; white-space: nowrap; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; } .ds-btn:hover { background: var(--sunk); border-color: var(--ink-3); } .ds-btn:active { background: var(--line); } .ds-btn:focus-visible { outline: 2px solid var(--rail); outline-offset: 2px; } .ds-btn-primary { background: var(--rail); border-color: var(--rail); color: var(--rail-ink); } .ds-btn-primary:hover { background: var(--rail-deep); border-color: var(--rail-deep); } .ds-btn-primary:active { background: var(--rail-deep); }"
+    },
+    {
+      "name": "Default and Small Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Every other action: white with a line border. Small (28px) sits inside rows.",
+      "html": "<span class=\"ds-btn-row\"><button class=\"ds-btn\" type=\"button\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M2.5 3.5h11v8h-6l-3 2.5v-2.5h-2z\"/></svg>Hotel messages</button><button class=\"ds-btn ds-btn-sm\" type=\"button\">Mark seen</button></span>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--r-2); background: var(--surface); color: var(--ink); font-family: var(--font); font-variant-numeric: tabular-nums; font-size: var(--fs-2); font-weight: 600; white-space: nowrap; cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s; } .ds-btn:hover { background: var(--sunk); border-color: var(--ink-3); } .ds-btn:active { background: var(--line); } .ds-btn:focus-visible { outline: 2px solid var(--rail); outline-offset: 2px; } .ds-btn-row { display: inline-flex; align-items: center; gap: 8px; } .ds-btn-sm { height: 28px; padding: 0 9px; font-size: var(--fs-1); }"
+    },
+    {
+      "name": "Rail with Tabs",
+      "kind": "nav",
+      "refersTo": "rail-tab-current",
+      "description": "The ultramarine rail: name, the three tabs in a translucent tray, and outline buttons.",
+      "html": "<div class=\"ds-rail\"><b class=\"ds-rail-name\">FH-MUM NJF</b><nav class=\"ds-rail-tabs\" aria-label=\"Planner\"><button type=\"button\" aria-current=\"page\">Najaf</button><button type=\"button\">Karbala Hotel Messages</button><button type=\"button\">Najaf Approvals</button></nav><button class=\"ds-rail-btn\" type=\"button\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M2.5 4.5h6m3 0h2m-11 7h2m3 0h6M10 3v3M6 10v3\"/></svg>Hotels and rooms</button></div>",
+      "css": ".ds-rail { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; padding: 10px 24px; background: var(--rail); color: var(--rail-ink); font-family: var(--font); font-variant-numeric: tabular-nums; } .ds-rail-name { font-size: var(--fs-4); font-stretch: 84%; font-weight: 800; letter-spacing: 0.02em; } .ds-rail-tabs { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--rail-wash); } .ds-rail-tabs button { height: 32px; padding: 0 13px; border: 0; border-radius: 7px; background: transparent; color: var(--rail-ink); font: inherit; font-size: var(--fs-2); font-weight: 600; white-space: nowrap; cursor: pointer; transition: background 0.15s, color 0.15s; } .ds-rail-tabs button:hover:not([aria-current]) { background: var(--rail-wash); } .ds-rail-tabs button[aria-current] { background: var(--rail-ink); color: var(--rail-deep); } .ds-rail-btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; margin-left: auto; padding: 0 12px; border: 1px solid var(--rail-line); border-radius: var(--r-2); background: transparent; color: var(--rail-ink); font: inherit; font-size: var(--fs-2); font-weight: 600; cursor: pointer; transition: background 0.15s, border-color 0.15s; } .ds-rail-btn:hover { background: var(--rail-wash); border-color: var(--rail-ink); } .ds-rail :focus-visible { outline: 2px solid var(--rail-ink); outline-offset: 2px; }"
+    },
+    {
+      "name": "Tour Tag",
+      "kind": "chip",
+      "refersTo": "tour-tag",
+      "description": "A tour number as a luggage tag. The hue comes from the tour number and is the same on every screen.",
+      "html": "<span class=\"ds-tags\"><span class=\"ds-tag\" style=\"--h: 248\">1042</span><span class=\"ds-tag\" style=\"--h: 20\">1057</span><span class=\"ds-tag\" style=\"--h: 150\">1063</span><span class=\"ds-tag\" style=\"--h: 300\">1071</span><span class=\"ds-tag ds-tag-held\">Nov</span></span>",
+      "css": ".ds-tags { display: inline-flex; flex-wrap: wrap; gap: 6px; } .ds-tag { --tag-bg: oklch(90.5% 0.08 var(--h, 272)); --tag-line: oklch(72% 0.125 var(--h, 272)); --tag-ink: oklch(29% 0.125 var(--h, 272)); display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px 0 6px; border-radius: 11px 5px 5px 11px; background: var(--tag-bg); color: var(--tag-ink); font-family: var(--font); font-variant-numeric: tabular-nums; font-size: var(--fs-2); font-stretch: 84%; font-weight: 700; letter-spacing: -0.005em; line-height: 1; white-space: nowrap; } .ds-tag::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--surface); box-shadow: inset 0 0 0 1px var(--tag-line); } .ds-tag-held { background: var(--sunk); color: var(--ink-2); }"
+    },
+    {
+      "name": "Hotel Chip",
+      "kind": "chip",
+      "refersTo": "hotel-chip-ruya",
+      "description": "The three hotels in fill order: a soft tint with a square dot in the hotel colour.",
+      "html": "<span class=\"ds-chips\"><span class=\"ds-chip\" data-hotel=\"ruya\">Ruya</span><span class=\"ds-chip\" data-hotel=\"araf\">Araf</span><span class=\"ds-chip\" data-hotel=\"c\">Hotel C</span></span>",
+      "css": ".ds-chips { display: inline-flex; gap: 6px; } .ds-chip { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px 0 7px; border-radius: var(--r-1); background: var(--h-soft); color: var(--h-ink); font-family: var(--font); font-variant-numeric: tabular-nums; font-size: var(--fs-1); font-weight: 600; white-space: nowrap; } .ds-chip::before { content: ''; width: 8px; height: 8px; border-radius: 2px; background: var(--h-main); } .ds-chip[data-hotel='ruya'] { --h-main: var(--ruya); --h-soft: var(--ruya-soft); --h-ink: var(--ruya-ink); } .ds-chip[data-hotel='araf'] { --h-main: var(--araf); --h-soft: var(--araf-soft); --h-ink: var(--araf-ink); } .ds-chip[data-hotel='c'] { --h-main: var(--c); --h-soft: var(--c-soft); --h-ink: var(--c-ink); }"
+    },
+    {
+      "name": "Stay Bars",
+      "kind": "custom",
+      "refersTo": "stay-bar",
+      "description": "The signature: rooms down the side, nights across, each stay a tag-coloured bar. Hatched grey is a held room.",
+      "html": "<div class=\"ds-sb\"><div class=\"ds-sb-row\"><div class=\"ds-sb-label\"><b>201</b><small>4 beds</small></div><div class=\"ds-sb-track\"><button type=\"button\" class=\"ds-sb-bar\" style=\"grid-column: 1 / span 4; --h: 248\"><b>1042</b></button><button type=\"button\" class=\"ds-sb-bar\" style=\"grid-column: 6 / span 3; --h: 150\"><b>1063</b></button></div></div><div class=\"ds-sb-row\"><div class=\"ds-sb-label\"><b>202</b><small>3 beds</small></div><div class=\"ds-sb-track\"><span class=\"ds-sb-bar ds-sb-held\" style=\"grid-column: 1 / span 2\"><b>Nov</b></span><button type=\"button\" class=\"ds-sb-bar\" style=\"grid-column: 3 / span 5; --h: 20\"><b>1057</b></button></div></div><div class=\"ds-sb-row\"><div class=\"ds-sb-label\"><b>203</b><small>2 beds</small></div><div class=\"ds-sb-track\"><button type=\"button\" class=\"ds-sb-bar\" style=\"grid-column: 2 / span 3; --h: 300\"><b>1071</b></button><button type=\"button\" class=\"ds-sb-bar\" style=\"grid-column: 6 / span 3; --h: 150\"><b>1063</b></button></div></div></div>",
+      "css": ".ds-sb { border: 1px solid var(--line); border-radius: var(--r-3); background: var(--surface); overflow: hidden; font-family: var(--font); font-variant-numeric: tabular-nums; min-width: 340px; } .ds-sb-row { display: grid; grid-template-columns: 92px 1fr; min-height: 29px; } .ds-sb-row + .ds-sb-row { border-top: 1px solid var(--line); } .ds-sb-label { display: flex; align-items: center; gap: 6px; padding: 0 10px; border-right: 1px solid var(--line-strong); color: var(--ink); white-space: nowrap; } .ds-sb-label b { font-size: var(--fs-2); font-weight: 700; } .ds-sb-label small { font-size: var(--fs-1); color: var(--ink-2); } .ds-sb-track { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); align-items: center; padding: 3px 0; background-image: linear-gradient(to right, var(--line) 1px, transparent 1px); background-size: calc(100% / 8) 100%; background-position: -1px 0; } .ds-sb-bar { --tag-bg: oklch(90.5% 0.08 var(--h, 272)); --tag-line: oklch(72% 0.125 var(--h, 272)); --tag-ink: oklch(29% 0.125 var(--h, 272)); display: flex; align-items: center; gap: 5px; height: 22px; min-width: 0; margin: 0 2px 0 1px; padding: 0 6px 0 5px; border: 1px solid var(--tag-line); border-radius: 11px 5px 5px 11px; background: var(--tag-bg); color: var(--tag-ink); font: inherit; font-size: var(--fs-1); line-height: 1; white-space: nowrap; overflow: hidden; text-align: left; transition: border-color 0.15s, box-shadow 0.15s; } .ds-sb-bar::before { content: ''; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--surface); box-shadow: inset 0 0 0 1px var(--tag-line); } .ds-sb-bar b { font-stretch: 84%; font-weight: 700; } button.ds-sb-bar { cursor: pointer; } button.ds-sb-bar:hover { border-color: var(--tag-ink); box-shadow: 0 2px 6px -2px var(--shadow); } button.ds-sb-bar:focus-visible { outline: 2px solid var(--rail); outline-offset: 2px; } .ds-sb-held { border-color: var(--line-strong); background: repeating-linear-gradient(135deg, var(--sunk) 0 4px, var(--line) 4px 8px); color: var(--ink-2); }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A labelled field: 34px, white, rail border and soft blue ring on focus.",
+      "html": "<label class=\"ds-field\">Rooms asked for<input type=\"text\" value=\"2x6, 3x4\" /><small>Bed size first: 2x6 is six 2-bed rooms</small></label>",
+      "css": ".ds-field { display: grid; gap: 5px; font-family: var(--font); font-variant-numeric: tabular-nums; font-size: var(--fs-2); font-weight: 600; color: var(--ink-2); } .ds-field small { font-size: var(--fs-1); font-weight: 400; } .ds-field input { height: 34px; width: 220px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: var(--r-2); background: var(--surface); color: var(--ink); font: inherit; font-size: var(--fs-3); font-weight: 400; transition: border-color 0.15s, box-shadow 0.15s; } .ds-field input:hover { border-color: var(--ink-3); } .ds-field input:focus-visible { outline: 0; border-color: var(--rail); box-shadow: 0 0 0 3px var(--info-soft); }"
+    },
+    {
+      "name": "Segmented Control",
+      "kind": "custom",
+      "refersTo": "segmented",
+      "description": "A sunk tray of choices; the pressed one is a raised white pill in rail text, with an optional count.",
+      "html": "<div class=\"ds-seg\" role=\"group\" aria-label=\"View\"><button type=\"button\" aria-pressed=\"true\">By night</button><button type=\"button\" aria-pressed=\"false\">By room</button><button type=\"button\" aria-pressed=\"false\">Changed<span>3</span></button></div>",
+      "css": ".ds-seg { display: inline-flex; gap: 2px; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--sunk); font-family: var(--font); font-variant-numeric: tabular-nums; } .ds-seg button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--ink-2); font: inherit; font-size: var(--fs-2); font-weight: 600; white-space: nowrap; cursor: pointer; transition: background 0.15s, color 0.15s; } .ds-seg button:hover:not([aria-pressed='true']) { background: var(--line); color: var(--ink); } .ds-seg button[aria-pressed='true'] { background: var(--surface); color: var(--rail); box-shadow: 0 1px 2px var(--shadow); } .ds-seg button span { font-weight: 500; color: var(--ink-3); } .ds-seg button:focus-visible { outline: 2px solid var(--rail); outline-offset: 2px; }"
+    },
+    {
+      "name": "Changed Row and Notices",
+      "kind": "card",
+      "refersTo": "notice",
+      "description": "Blue means changed in NKERP; a caution is neutral with an orange icon; red is a problem.",
+      "html": "<div class=\"ds-notes\"><p class=\"ds-change\"><span class=\"ds-flag\">Changed in NKERP</span><b>Hotel pax</b><s>42</s><span>46</span></p><p class=\"ds-notice\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 2.5 14 13H2zM8 6.5v3m0 1.8v.2\"/></svg>3 pending tours in this range are not in the plan yet.</p><p class=\"ds-notice ds-notice-bad\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M8 2.5 14 13H2zM8 6.5v3m0 1.8v.2\"/></svg>NKERP did not answer. Nothing was changed.</p></div>",
+      "css": ".ds-notes { display: grid; gap: 8px; max-width: 420px; font-family: var(--font); font-variant-numeric: tabular-nums; font-size: var(--fs-2); color: var(--ink); } .ds-notes p { margin: 0; } .ds-change { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; padding: 8px 12px; border-radius: var(--r-2); background: var(--info-soft); } .ds-flag { padding: 1px 6px; border-radius: 4px; background: var(--surface); color: var(--rail); box-shadow: inset 0 0 0 1px var(--info-line); font-size: var(--fs-1); font-weight: 600; } .ds-change b { font-weight: 600; color: var(--ink-2); } .ds-change s { color: var(--ink-3); } .ds-change span:last-child { font-weight: 600; } .ds-change span:last-child::before { content: '\\2192'; margin-right: 6px; font-weight: 400; color: var(--ink-3); } .ds-notice { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--r-2); background: var(--surface); } .ds-notice svg { flex: none; margin-top: 1px; color: var(--caution); } .ds-notice-bad { border-color: var(--bad); background: var(--bad-soft); color: var(--bad-ink); } .ds-notice-bad svg { color: var(--bad); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Group Tags",
+    "overview": "**Creative North Star: \"Group Tags\"**\n\nThe look comes from the colour-coded lanyards and luggage tags a ziyarat group carries. Every tour is a tag: a tinted pill with a punched hole and bold narrow lettering. The plan is read by following a tag's colour across the changes list, the nightly tables, the rooms-by-night board, the room picker and the hotel messages. The owner chose this direction; it replaced the previous look entirely.\n\nThe page is bright and flat: white surfaces on a faintly blue canvas, one ultramarine rail across the top, and thin lines instead of shadows. It is a working tool (surface mode: Operate) used mostly on a laptop or desktop, so density is high and the first screen is the plan itself: summary line, NKERP changes, then the occupancy chart. It does not open on a row of same-size stat cards or a dark splash.",
+    "keyCharacteristics": [
+      "One strong colour for the frame (the rail); colour elsewhere always means a tour, a hotel or a state.",
+      "Twelve tag hues, derived from the tour number, the same on every screen.",
+      "Three hotel data colours in the order the hotels fill: teal, amber, raspberry.",
+      "One type family in two widths; six sizes; tabular numerals everywhere.",
+      "Flat tonal layering; shadows only on the side panel and as state feedback.",
+      "Colour transitions only. Movement is limited to panels, disclosures and the pull progress."
+    ],
+    "rules": [
+      {
+        "name": "The Tag Follows the Tour Rule",
+        "body": "A tour's hue is hashed from its tour number (`tagHue` in `src/components/ui.tsx`). Never assign a tag colour by position, hotel or status.",
+        "section": "colors"
+      },
+      {
+        "name": "The Hotels Are Data Rule",
+        "body": "Hotel colours mark hotels only; tag colours mark tours only. They share hues, so form separates them: a tag is a pill with a punched hole, a hotel is a square dot, a flat chip or a chart fill.",
+        "section": "colors"
+      },
+      {
+        "name": "The Blue Changed, Red Problem Rule",
+        "body": "Blue wash means NKERP changed it. Red means the plan cannot work as it stands. Nothing else uses either.",
+        "section": "colors"
+      },
+      {
+        "name": "The Neutral Caution Rule",
+        "body": "A caution is a white notice with an orange icon, never an amber fill, so it cannot be read as the amber hotel.",
+        "section": "colors"
+      },
+      {
+        "name": "The Six Sizes Rule",
+        "body": "Type uses `--fs-1` to `--fs-6` (0.75, 0.8125, 0.875, 1, 1.25, 1.75rem). Nothing is set below 0.75rem (12px).",
+        "section": "typography"
+      },
+      {
+        "name": "The Two Widths Rule",
+        "body": "Narrow bold is for headings, tags and numerals that are read as figures. Sentences stay at normal width.",
+        "section": "typography"
+      },
+      {
+        "name": "The Header Under the Bar Rule",
+        "body": "Above 1180px every table header and the room board's date row stick directly under the page bar (`top: var(--bar-h)`); inside a side panel they stick to the panel top.",
+        "section": "layout"
+      },
+      {
+        "name": "The Notes Stay On Screen Rule",
+        "body": "Warnings and NKERP changes live in the row's Notes column. The groups table uses a fixed layout so that column fits without sideways scrolling at desktop width; on a phone the note spans the full card.",
+        "section": "layout"
+      },
+      {
+        "name": "The Flat Page Rule",
+        "body": "A shadow is a response to state or an overlay. Panels are separated by lines and tone.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do put a tour tag wherever a tour appears, coloured with `hueStyle(tourNo)`.",
+      "Do list and stack hotels in fill order: Ruya, Araf, Hotel C.",
+      "Do add a colour as an OKLCH token on `:root` before using it.",
+      "Do put a warning in the row's Notes cell, next to the control that fixes it.",
+      "Do keep every control at least 24px tall, and 44px on touch.",
+      "Do give each page bar a single primary button.",
+      "Do say in the rail whether edits are saved."
+    ],
+    "donts": [
+      "Don't open a screen on a row of same-size stat cards or a dark splash; the plan comes first.",
+      "Don't use a hotel colour for a tour, a status or a warning, or a tag colour for a hotel.",
+      "Don't use blue wash for anything except \"changed in NKERP\", or red for anything except a problem.",
+      "Don't fill a caution with amber or yellow.",
+      "Don't add a seventh type size or set text below 12px.",
+      "Don't add resting shadows to cards, or motion that is not a state change.",
+      "Don't invent a logo, photography or brand marks; none exist."
+    ]
+  }
+}
