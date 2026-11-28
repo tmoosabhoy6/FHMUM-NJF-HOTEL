@@ -1,12 +1,12 @@
-import { motion } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 import { dayLabel } from '../../shared/dates';
 import { HOTEL_ORDER } from '../../shared/engine';
 import { hotelMessage, type HotelMessage } from '../../shared/messages';
 import type { Group, HotelId, Plan } from '../../shared/types';
-import { useNames } from '../lib/names';
 import { copy } from '../lib/copy';
+import { useNames } from '../lib/names';
 import { load, save } from '../lib/storage';
+import { Drawer, HotelChip, Icon, Segmented, TourTag } from './ui';
 
 const KIND_KEY = 'njf.messageKind.v1';
 
@@ -18,6 +18,16 @@ interface Props {
 
 type Item = HotelMessage & { hotel: HotelId; leader: string };
 
+/** A copy button that confirms for a moment. */
+export function CopyButton({ done, label = 'Copy', onClick }: { done: boolean; label?: string; onClick: () => void }) {
+  return (
+    <button className="btn sm copy" type="button" data-done={done} onClick={onClick}>
+      <Icon name={done ? 'check' : 'copy'} size={14} />
+      {done ? 'Copied' : label}
+    </button>
+  );
+}
+
 /** The room-request messages to send to the hotels, one per group, by arrival date. */
 export function HotelMessages({ groups, plan, onClose }: Props) {
   const names = useNames();
@@ -25,11 +35,6 @@ export function HotelMessages({ groups, plan, onClose }: Props) {
   const [copied, setCopied] = useState<string | null>(null);
   const [kind, setKind] = useState<'plain' | 'rooms'>(() => (load<string>(KIND_KEY, 'plain') === 'rooms' ? 'rooms' : 'plain'));
   useEffect(() => save(KIND_KEY, kind), [kind]);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
 
   const items = useMemo(() => {
     const list: Item[] = [];
@@ -57,95 +62,68 @@ export function HotelMessages({ groups, plan, onClose }: Props) {
   };
 
   return (
-    <>
-      <motion.div className="scrim" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
-      <motion.aside
-        className="drawer wide"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Hotel messages"
-        initial={{ x: '100%' }}
-        animate={{ x: 0 }}
-        exit={{ x: '100%' }}
-        transition={{ type: 'spring', stiffness: 380, damping: 40 }}
-      >
-        <div className="drawer-head">
-          <h2>Hotel messages</h2>
-          <button className="btn quiet" onClick={onClose}>
-            Done
-          </button>
+    <Drawer title="Hotel messages" size="lg" onClose={onClose}>
+      <section className="set">
+        <p>One message per group, ready to send to its hotel, by the day the group checks in. Copy one, or every message for a day.</p>
+        <div className="msg-tools">
+          <Segmented
+            label="Message type"
+            value={kind}
+            onChange={setKind}
+            options={[
+              { id: 'plain', label: 'Requirements only' },
+              { id: 'rooms', label: 'With room numbers' },
+            ]}
+          />
+          <Segmented
+            label="Hotel"
+            value={hotel}
+            onChange={setHotel}
+            options={(['all', ...HOTEL_ORDER] as const).map((id) => {
+              const count = id === 'all' ? items.length : items.filter((m) => m.hotel === id).length;
+              return { id, label: id === 'all' ? 'All hotels' : names[id], count, disabled: !count };
+            })}
+          />
         </div>
-        <div className="drawer-body">
-          <section className="set">
-            <p>One message per group, ready to send to its hotel, by the day the group checks in. Copy one, or every message for a day.</p>
-            <div className="msg-kind" role="radiogroup" aria-label="Message type">
-              {(
-                [
-                  ['plain', 'Requirements only', 'Bed sizes and number of rooms'],
-                  ['rooms', 'With room numbers', 'Adds the rooms planned for each line'],
-                ] as const
-              ).map(([id, label, hint]) => (
-                <button key={id} type="button" role="radio" aria-checked={kind === id} className="kind" onClick={() => setKind(id)}>
-                  <b>{label}</b>
-                  <span>{hint}</span>
-                </button>
-              ))}
-            </div>
-            <div className="msg-filter" role="group" aria-label="Hotel">
-              {(['all', ...HOTEL_ORDER] as const).map((id) => {
-                const count = id === 'all' ? items.length : items.filter((m) => m.hotel === id).length;
-                return (
-                  <button key={id} type="button" className="chip-btn" data-hotel={id === 'all' ? undefined : id} aria-pressed={hotel === id} disabled={!count} onClick={() => setHotel(id)}>
-                    {id === 'all' ? 'All hotels' : names[id]} <span>{count}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
+        <p className="set-hint">{kind === 'plain' ? 'Bed sizes and number of rooms.' : `Adds the ${names.ruya} room numbers planned for each line.`}</p>
+      </section>
 
-          {byDate.length ? (
-            byDate.map(([date, list]) => {
-              const key = `day-${date}`;
-              return (
-                <section className="msg-day" key={date}>
-                  <div className="msg-day-head">
-                    <h3>{dayLabel(date)}</h3>
-                    <span>
-                      {list.length} {list.length === 1 ? 'message' : 'messages'}
-                    </span>
-                    {list.length > 1 ? (
-                      <button className="btn" onClick={() => flash(key, list.map((m) => m.text).join('\n\n'))}>
-                        {copied === key ? 'Copied' : `Copy all ${list.length}`}
-                      </button>
-                    ) : null}
+      {byDate.length ? (
+        byDate.map(([date, list]) => {
+          const key = `day-${date}`;
+          return (
+            <section className="msg-day" key={date}>
+              <div className="msg-day-head">
+                <h3>{dayLabel(date)}</h3>
+                <span>
+                  {list.length} {list.length === 1 ? 'message' : 'messages'}
+                </span>
+                {list.length > 1 ? <CopyButton done={copied === key} label={`Copy all ${list.length}`} onClick={() => flash(key, list.map((m) => m.text).join('\n\n'))} /> : null}
+              </div>
+              {list.map((m) => (
+                <article className="msg" key={m.groupId}>
+                  <div className="msg-head">
+                    <TourTag no={m.tourNo} />
+                    <span className="msg-who">{m.leader}</span>
+                    <HotelChip hotel={m.hotel} />
+                    <CopyButton done={copied === m.groupId} onClick={() => flash(m.groupId, m.text)} />
                   </div>
-                  {list.map((m) => (
-                    <article className="msg" key={m.groupId} data-hotel={m.hotel}>
-                      <div className="msg-head">
-                        <span className="chip" data-hotel={m.hotel}>
-                          {names[m.hotel]}
-                        </span>
-                        <b>Tour {m.tourNo}</b>
-                        <span className="msg-who">{m.leader}</span>
-                        <button className="btn solid msg-copy" data-done={copied === m.groupId} onClick={() => flash(m.groupId, m.text)}>
-                          {copied === m.groupId ? 'Copied' : 'Copy'}
-                        </button>
-                      </div>
-                      {m.rooms ? null : <p className="msg-warn">No rooms yet: type or choose them in the Groups table.</p>}
-                      {kind === 'rooms' && m.rooms && !m.numbered ? (
-                        <p className="msg-note">No room numbers: the plan only numbers {names.ruya} rooms.</p>
-                      ) : null}
-                      <pre className="msg-text">{m.text}</pre>
-                    </article>
-                  ))}
-                </section>
-              );
-            })
-          ) : (
-            <p className="read-empty">No messages for this hotel.</p>
-          )}
-        </div>
-      </motion.aside>
-    </>
+                  {m.rooms ? null : (
+                    <p className="msg-warn">
+                      <Icon name="alert" size={14} />
+                      No rooms yet: type or choose them in the Groups table.
+                    </p>
+                  )}
+                  {kind === 'rooms' && m.rooms && !m.numbered ? <p className="msg-note">No room numbers: the plan only numbers {names.ruya} rooms.</p> : null}
+                  <pre className="msg-text">{m.text}</pre>
+                </article>
+              ))}
+            </section>
+          );
+        })
+      ) : (
+        <p className="empty">No messages for this hotel.</p>
+      )}
+    </Drawer>
   );
 }

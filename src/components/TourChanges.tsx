@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import type { DateChange, PullMeta } from '../../shared/types';
-import { changeText, unseen, unseenTours, useAlerts } from '../lib/alerts';
+import { FIELD_LABEL, unseen, unseenTours, useAlerts } from '../lib/alerts';
 import type { InputChange } from '../lib/inputs';
+import { ago, plainDates } from '../lib/time';
+import { Icon, TourTag } from './ui';
 
 interface PaxProps {
   tourNo: string;
@@ -16,34 +18,43 @@ export function PaxInput({ tourNo, pax, nkerpPax, paxBefore, infants = 0, onChan
   const [draft, setDraft] = useState<string | null>(null);
   const original = paxBefore ?? nkerpPax;
   return (
-    <div className="pax-edit">
-      <input
-        type="number"
-        min={0}
-        max={9999}
-        step={1}
-        inputMode="numeric"
-        aria-label={`Hotel pax for tour ${tourNo}`}
-        value={draft ?? pax ?? ''}
-        onChange={(event) => {
-          const raw = event.target.value;
-          const next = event.target.valueAsNumber;
-          const valid = /^\d{1,4}$/.test(raw) && event.target.validity.valid;
-          setDraft(valid ? null : raw);
-          if (valid && next !== pax) onChange({ pax: next, paxBefore: original ?? pax });
-        }}
-        onBlur={() => setDraft(null)}
-      />
+    <div className="pax" data-adjusted={nkerpPax !== undefined}>
+      <span className="pax-row">
+        <input
+          type="number"
+          min={0}
+          max={9999}
+          step={1}
+          inputMode="numeric"
+          aria-label={`Hotel pax for tour ${tourNo}`}
+          aria-invalid={draft !== null}
+          value={draft ?? pax ?? ''}
+          onChange={(event) => {
+            const raw = event.target.value;
+            const next = event.target.valueAsNumber;
+            const valid = /^\d{1,4}$/.test(raw) && event.target.validity.valid;
+            setDraft(valid ? null : raw);
+            if (valid && next !== pax) onChange({ pax: next, paxBefore: original ?? pax });
+          }}
+          onBlur={() => setDraft(null)}
+        />
+        {infants > 0 && <small title={`${infants} ${infants === 1 ? 'infant shares' : 'infants share'} a bed`}>+{infants} inf</small>}
+      </span>
       {draft !== null && <small className="pax-error">Enter 0–9999</small>}
-      {infants > 0 && <small>+{infants} inf</small>}
       {nkerpPax !== undefined && (
         <>
-          <span className="tour-change pax" title={`NKERP currently shows ${nkerpPax ?? 'unconfirmed'} hotel pax`}>Pax adjusted: {original ?? 'unconfirmed'} → {pax}</span>
-          {original !== nkerpPax && <small>NKERP now {nkerpPax ?? 'unconfirmed'}</small>}
-          <button className="linkish" type="button" onClick={() => {
-            setDraft(null);
-            onChange({ pax: null, paxBefore: null });
-          }}>
+          <small className="pax-note" title={`NKERP currently shows ${nkerpPax ?? 'unconfirmed'} hotel pax`}>
+            Adjusted from {original ?? 'unconfirmed'}
+            {original !== nkerpPax ? `, NKERP now ${nkerpPax ?? 'unconfirmed'}` : ''}
+          </small>
+          <button
+            className="link"
+            type="button"
+            onClick={() => {
+              setDraft(null);
+              onChange({ pax: null, paxBefore: null });
+            }}
+          >
             Use NKERP ({nkerpPax ?? 'unconfirmed'})
           </button>
         </>
@@ -52,30 +63,51 @@ export function PaxInput({ tourNo, pax, nkerpPax, paxBefore, infants = 0, onChan
   );
 }
 
-const route = (legs: string[]) => legs.length ? legs.join(' → ') : 'No stay dates recorded';
+const route = (legs: string[]) => (legs.length ? legs.map(plainDates).join(' → ') : 'No stay dates recorded');
 
 export function ReapprovalBadge({ change }: { change: DateChange | undefined }) {
   if (!change) return null;
-  return <span className="tour-change" title={`Previously: ${route(change.before)}. Updated: ${route(change.after)}.`}>Re-approval · dates changed</span>;
+  return (
+    <span className="flag" data-tone="info" title={`Previously: ${route(change.before)}. Updated: ${route(change.after)}.`}>
+      Re-approval · dates changed
+    </span>
+  );
 }
 
+/** Tours whose itinerary changed on this pull, or that wait for NKERP to re-approve them. */
 export function PullChanges({ meta }: { meta: PullMeta }) {
   const changed = meta.changes ?? [];
   const awaiting = meta.awaiting ?? [];
   if (!changed.length && !awaiting.length) return null;
   const total = new Set([...changed, ...awaiting].map((t) => t.tourId)).size;
   return (
-    <details className="pull-changes" key={meta.fetchedAt}>
-      <summary>{total} {total === 1 ? 'tour needs' : 'tours need'} re-approval review</summary>
-      <ul>
+    <details className="inbox quiet" key={meta.fetchedAt}>
+      <summary>
+        <Icon name="chevron" />
+        <b>
+          {total} {total === 1 ? 'tour needs' : 'tours need'} re-approval review
+        </b>
+        <span>Dates or route changed, or waiting for NKERP to re-approve</span>
+      </summary>
+      <ul className="inbox-list">
         {changed.map((change) => (
           <li key={change.tourId}>
-            <b>Tour {change.tourNo} · dates or route changed</b>
-            <span>Previously {route(change.before)}</span>
-            <span>Updated {route(change.after)}</span>
+            <TourTag no={change.tourNo} />
+            <div className="inbox-what">
+              <span className="delta">
+                <b>Dates or route</b>
+                <s>{route(change.before)}</s>
+                <span>{route(change.after)}</span>
+              </span>
+            </div>
           </li>
         ))}
-        {awaiting.map((tour) => <li key={`awaiting-${tour.tourId}`}><b>Tour {tour.tourNo} · awaiting NKERP re-approval</b></li>)}
+        {awaiting.map((tour) => (
+          <li key={`awaiting-${tour.tourId}`}>
+            <TourTag no={tour.tourNo} />
+            <div className="inbox-what">Awaiting NKERP re-approval</div>
+          </li>
+        ))}
       </ul>
     </details>
   );
@@ -90,26 +122,36 @@ export function useChanged(meta: PullMeta | undefined) {
   }, [meta, seen]);
 }
 
-/** What changed on this tour in NKERP, under the tour number, with a button to mark it seen. */
+function Deltas({ changes }: { changes: { field: keyof typeof FIELD_LABEL; before: string; after: string }[] }) {
+  return (
+    <>
+      {changes.map((c) => (
+        <span className="delta" key={c.field}>
+          <b>{FIELD_LABEL[c.field]}</b>
+          <s>{plainDates(c.before)}</s>
+          <span>{plainDates(c.after)}</span>
+        </span>
+      ))}
+    </>
+  );
+}
+
+/** What changed on this tour in NKERP, in the row's notes, with a button to mark it seen. */
 export function ChangeBadge({ tourId, meta }: { tourId: number; meta: PullMeta | undefined }) {
   const { seen, markSeen } = useAlerts();
   const change = unseen(tourId, meta?.alerts?.[tourId], seen);
   if (!change?.changes.length) return null;
   return (
-    <span className="tour-alert" role="note">
-      <b>Changed in NKERP</b>
-      {change.changes.map((c) => <span key={c.field}>{changeText(c)}</span>)}
-      <button type="button" className="linkish" onClick={() => markSeen([{ tourId, at: change.at }])}>Mark seen</button>
+    <span className="change" role="note">
+      <span className="flag" data-tone="info">
+        Changed in NKERP
+      </span>
+      <Deltas changes={change.changes} />
+      <button type="button" className="link" onClick={() => markSeen([{ tourId, at: change.at }])}>
+        Mark seen
+      </button>
     </span>
   );
-}
-
-function ago(iso: string) {
-  const minutes = Math.round((Date.now() - Date.parse(iso)) / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  return hours < 24 ? `${hours} h ago` : `${Math.round(hours / 24)} d ago`;
 }
 
 /** One line on the automatic check and the alert emails. */
@@ -119,7 +161,8 @@ export function MonitorLine() {
   const { check, email } = monitor;
   return (
     <p className="monitor-line" data-ok={check.ok && (!email || email.ok)}>
-      NKERP checked automatically every {monitor.every ?? 15} min · last check {ago(check.at)}{check.ok ? '' : `: ${check.message}`}
+      NKERP checked automatically every {monitor.every ?? 15} min · last check {ago(check.at)}
+      {check.ok ? '' : `: ${check.message}`}
       {' · '}
       {!monitor.emailOn ? 'email alerts not set up' : email && !email.ok ? `email failed (${email.message}), will retry` : 'email alerts on'}
     </p>
@@ -130,25 +173,33 @@ export function MonitorLine() {
 export function TourAlerts({ meta }: { meta: PullMeta | undefined }) {
   const { seen, markSeen } = useAlerts();
   const tours = unseenTours(meta, seen);
-  if (!tours.length) return <MonitorLine />;
+  if (!tours.length) return null;
   return (
-    <section className="tour-alerts" aria-label="Tour changes in NKERP">
-      <div className="tour-alerts-head">
-        <h2>{tours.length} {tours.length === 1 ? 'tour' : 'tours'} changed in NKERP</h2>
-        <button type="button" className="btn" onClick={() => markSeen(tours.map(({ tourId, at }) => ({ tourId, at })))}>Mark all seen</button>
+    <section className="inbox" aria-label="Tour changes in NKERP">
+      <div className="inbox-head">
+        <h2>
+          {tours.length} {tours.length === 1 ? 'tour' : 'tours'} changed in NKERP
+        </h2>
+        <p>The plan already uses the new numbers and dates. Changed rows are highlighted below.</p>
+        <button type="button" className="btn" onClick={() => markSeen(tours.map(({ tourId, at }) => ({ tourId, at })))}>
+          <Icon name="check" />
+          Mark all seen
+        </button>
       </div>
-      <p>The plan already uses the new numbers and dates. Changed rows are highlighted below.</p>
-      <ul>
+      <ul className="inbox-list">
         {tours.map((t) => (
           <li key={t.tourId}>
-            <b>Tour {t.tourNo}</b>
-            <span>{t.changes.map(changeText).join(' · ')}</span>
+            <TourTag no={t.tourNo} />
+            <div className="inbox-what">
+              <Deltas changes={t.changes} />
+            </div>
             <small>{ago(t.at)}</small>
-            <button type="button" className="linkish" onClick={() => markSeen([{ tourId: t.tourId, at: t.at }])}>Mark seen</button>
+            <button type="button" className="btn sm" onClick={() => markSeen([{ tourId: t.tourId, at: t.at }])}>
+              Mark seen
+            </button>
           </li>
         ))}
       </ul>
-      <MonitorLine />
     </section>
   );
 }
